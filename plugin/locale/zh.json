@@ -1,0 +1,49 @@
+{
+  "meta": {
+    "title": "Material 3 主题",
+    "description": "用一颗种子色推导出的 Material You 颜色角色，为界面重新着色。"
+  },
+  "nav": {
+    "title": "Material 3"
+  },
+  "page": {
+    "title": "Material 3 主题",
+    "description": "由一颗种子色推导出整套 Material You 颜色角色。明暗两套同时生成，因此始终彼此协调。",
+    "enabledTitle": "启用 Material 3 配色",
+    "enabledDescription": "用 Material 3 角色重新着色表面、文字、边框与状态色。关闭后回到你原先使用的主题。",
+    "on": "已启用",
+    "off": "已关闭",
+    "enable": "启用 Material 3",
+    "disable": "关闭 Material 3",
+    "seedTitle": "种子色",
+    "seedDescription": "整套配色由这颗颜色推导而来。",
+    "variantTitle": "配色调和方式",
+    "variantDescription": "决定配色偏离种子色的程度。色调斑点是 Material 3 默认值，表现力取向参考 M3 Expressive。",
+    "note": "修改立即生效，并记忆在本浏览器中，刷新页面即可恢复，无需重启应用。"
+  },
+  "seed": {
+    "deepseek": "DeepSeek 蓝",
+    "indigo": "靛蓝",
+    "violet": "紫罗兰",
+    "purple": "紫色",
+    "pink": "品红",
+    "red": "红色",
+    "orange": "橙色",
+    "amber": "琥珀",
+    "green": "绿色",
+    "teal": "青色",
+    "cyan": "天蓝",
+    "graphite": "石墨灰"
+  },
+  "variant": {
+    "tonalSpot": "色调斑点",
+    "expressive": "表现力",
+    "vibrant": "鲜艳",
+    "content": "内容",
+    "fidelity": "保真",
+    "neutral": "中性",
+    "monochrome": "单色",
+    "rainbow": "彩虹",
+    "fruitSalad": "水果沙拉"
+  }
+}
