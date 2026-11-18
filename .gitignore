@@ -1,0 +1,11 @@
+# Scratch space: asar dumps, npm cache, downloaded tarballs, probe scripts.
+# Everything here is regenerable and is deleted before handoff.
+.tmp/
+
+# Editor and OS noise
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+*.log
+node_modules/
