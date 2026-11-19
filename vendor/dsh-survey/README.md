@@ -1,33 +1,32 @@
-# Vendored DSH token sheet
+# Vendored DSH token sheets
 
-These two files are extracted verbatim from the shipped DeepSeek Harness
-`app.asar` (Electron ASAR, version whatever is installed in
-`<dsh-install>\resources\app.asar` at extraction time).
+Extracted verbatim from the installed DeepSeek Harness `app.asar`. Regenerate
+with:
 
-| File | Origin | Why it is here |
+```
+node build/vendor-survey.mjs
+```
+
+| File | Bytes | Why it is here |
 | --- | --- | --- |
-| `design-platform.css` | `dsh/node_modules/@deepseek-ai/dsh-web-frontend/dist/assets/` | The sole colour authority: holds all 201 `--dsw-*` token declarations in six CSS blocks (`body` / `body[data-ds-dark-theme]` x3). `build/validate-coverage.mjs` reads it to prove the plugin covers exactly the tokens the product uses. |
-| `base.css` | Inlined in `@deepseek-ai/dsh-client-ui-theme/lib/client.js` (`STYLES` array) | Owns the radius scale (`--dsw-radius-xs..panel`) and font families, i.e. the values the plugin's shape mapping must agree with. |
+| `design-platform.css` | 29861 | Sole colour authority: every --dsw-* colour token, light and dark. |
+| `base.css` | 1933 | Radius scale and font families the shape mapping must agree with. |
+| `focus.css` | 1018 | Proves --dsw-focus-ring-width is already 2px, i.e. already M3. |
+| `gradient-shadow-text.css` | 15273 | Declares --dsw-shadow-lv* and --dsw-elevation-*, which no other sheet defines. |
 
-## Extraction recipe
+`build/validate-coverage.mjs` reads all four. `design-platform.css` supplies
+the set of colour tokens the product is guaranteed to read (so nothing may be
+missing); the union of all four supplies the set of names that exist at all (so
+nothing may be invented).
 
-The ASAR pickled header puts `headerSize` at byte offset 12 and the JSON
-directory at offset 16; the payload starts at `16 + ceil(headerSize / 4) * 4`.
-`docs/research/dsh-theme-architecture.md` documents a reader that resolves this
-correctly. Once the directory is parsed, pull the two CSS files out of their
-asset paths.
+## When DSH ships a new frontend build
 
-## When to refresh
-
-When DSH ships a new frontend build:
-
-1. Re-extract both files over these copies.
-2. `node build/validate-coverage.mjs` — it exits non-zero if a token was
-   renamed, added or removed.
+1. `node build/vendor-survey.mjs`
+2. `node build/validate-coverage.mjs` — exits non-zero if a token was renamed,
+   added or removed.
 3. Update `src/parts/token-map.js` for whatever the check reports.
 4. `node build/verify.mjs`, then reinstall the bundle.
 
-If the version you extract from differs, record it here:
-
-- Extracted from: the Harness build installed on this machine at the time of
-  writing (see `git log --follow` on this file for the date).
+The compiled frontend bundle (`dist/assets/index-*.css`, ~92 KB) is deliberately
+not vendored: it is a build artifact, and every token it consumes is declared in
+one of the four sheets above.

@@ -34,7 +34,9 @@ const OUT_FILE = resolve(OUT_DIR, 'client.js');
 /** Order matters: later modules may read names declared by earlier ones. */
 const MODULES = [
   'src/generated/palettes.js',
+  'src/parts/palette-spec.js',
   'src/parts/token-map.js',
+  'src/client/stylesheet.js',
   'src/client/main.js',
 ];
 

@@ -1,5 +1,6 @@
 /**
- * Role order shared by the palette generator and the runtime.
+ * Role order shared by the palette generator, the Host palette engine and the
+ * runtime.
  *
  * The first 36 entries are read straight off a `DynamicScheme` instance (they
  * are the ARGB getters MaterialDynamicColors derives for every M3 scheme).
@@ -64,34 +65,66 @@ export const FIXED_ROLE_ORDER = [
 /** The 36 roles a DynamicScheme exposes directly. */
 export const SCHEME_ROLE_ORDER = ROLE_ORDER;
 
-/** Curated seeds shown in the settings page. `id` is stable, `hex` is the M3 seed. */
-export const SEEDS = [
-  { id: 'deepseek', hex: '#4176e6' },
-  { id: 'indigo', hex: '#4f5bd5' },
-  { id: 'violet', hex: '#7c3aed' },
-  { id: 'purple', hex: '#6750a4' },
-  { id: 'pink', hex: '#b90063' },
-  { id: 'red', hex: '#b3261e' },
-  { id: 'orange', hex: '#8b5000' },
-  { id: 'amber', hex: '#7c5800' },
-  { id: 'green', hex: '#2e6b30' },
-  { id: 'teal', hex: '#00696d' },
-  { id: 'cyan', hex: '#00658f' },
-  { id: 'graphite', hex: '#5c5f62' },
-];
+/**
+ * The single harmony this plugin ships.
+ *
+ * Material 3 has nine scheme variants; offering all of them turned the settings
+ * page into a colour picker and made the palette impossible to describe. Tonal
+ * spot is the Material 3 default (the scheme the design system documents first),
+ * so it is the only one left. The variant id stays in the data shape because the
+ * stored preference and the generated table still key on it.
+ */
+export const VARIANT_ID = 'tonalSpot';
+
+/** material-color-utilities class that implements {@link VARIANT_ID}. */
+export const VARIANT_CLASS = 'SchemeTonalSpot';
 
 /**
- * M3 scheme variants this plugin ships. `mc` is the material-color-utilities
- * class name; the ids are the ones the settings page and the stored config use.
+ * The eight Material 3 presets offered in manual mode.
+ *
+ * Seeds are the tones Material 3 publishes for its own baseline palettes, so a
+ * preset lands on the documented `#6750A4` role table rather than on an
+ * approximation of it. Automatic mode does not use this list at all — it derives
+ * the palette from the operating system accent colour at runtime.
  */
-export const VARIANTS = [
-  { id: 'tonalSpot', mc: 'SchemeTonalSpot', label: 'Tonal spot (Material 3 default)' },
-  { id: 'expressive', mc: 'SchemeExpressive', label: 'Expressive (Material 3 Expressive)' },
-  { id: 'vibrant', mc: 'SchemeVibrant', label: 'Vibrant' },
-  { id: 'content', mc: 'SchemeContent', label: 'Content' },
-  { id: 'fidelity', mc: 'SchemeFidelity', label: 'Fidelity' },
-  { id: 'neutral', mc: 'SchemeNeutral', label: 'Neutral' },
-  { id: 'monochrome', mc: 'SchemeMonochrome', label: 'Monochrome' },
-  { id: 'rainbow', mc: 'SchemeRainbow', label: 'Rainbow' },
-  { id: 'fruitSalad', mc: 'SchemeFruitSalad', label: 'Fruit salad' },
+export const PRESETS = [
+  { id: 'baseline', hex: '#6750a4', label: 'Material baseline' },
+  { id: 'blue', hex: '#00639b', label: 'Blue' },
+  { id: 'green', hex: '#006e1c', label: 'Green' },
+  { id: 'teal', hex: '#006a6a', label: 'Teal' },
+  { id: 'orange', hex: '#8e4e00', label: 'Orange' },
+  { id: 'pink', hex: '#984061', label: 'Pink' },
+  { id: 'red', hex: '#b3261e', label: 'Red' },
+  { id: 'blueGrey', hex: '#525e7d', label: 'Blue grey' },
+];
+
+/** Preset used whenever the operating system colour cannot be read. */
+export const DEFAULT_PRESET = 'baseline';
+
+/**
+ * Colours the stylesheet needs that are not DSH tokens.
+ *
+ * The runtime publishes the resolved role of each entry as a `--dsh-m3-*`
+ * custom property on `:root`, and the stylesheet references only those
+ * properties. Keeping the list here means the generator, the Host engine and the
+ * Client all agree on which roles cross the bridge.
+ */
+export const BRIDGE_ROLES = [
+  { variable: '--dsh-m3-surface', role: 'surface' },
+  { variable: '--dsh-m3-surface-container-lowest', role: 'surfaceContainerLowest' },
+  { variable: '--dsh-m3-surface-container-low', role: 'surfaceContainerLow' },
+  { variable: '--dsh-m3-surface-container', role: 'surfaceContainer' },
+  { variable: '--dsh-m3-surface-container-high', role: 'surfaceContainerHigh' },
+  { variable: '--dsh-m3-surface-container-highest', role: 'surfaceContainerHighest' },
+  { variable: '--dsh-m3-on-surface', role: 'onSurface' },
+  { variable: '--dsh-m3-on-surface-variant', role: 'onSurfaceVariant' },
+  { variable: '--dsh-m3-outline', role: 'outline' },
+  { variable: '--dsh-m3-outline-variant', role: 'outlineVariant' },
+  { variable: '--dsh-m3-primary', role: 'primary' },
+  { variable: '--dsh-m3-on-primary', role: 'onPrimary' },
+  { variable: '--dsh-m3-primary-container', role: 'primaryContainer' },
+  { variable: '--dsh-m3-error', role: 'error' },
+  { variable: '--dsh-m3-on-error', role: 'onError' },
+  { variable: '--dsh-m3-success', role: 'success' },
+  { variable: '--dsh-m3-warning', role: 'warning' },
 ];

@@ -16,10 +16,12 @@ const REPO = resolve(HERE, '..');
 
 const STEPS = [
   ['generate palettes', 'build/generate-palettes.mjs'],
+  ['bundle host', 'build/bundle-host.mjs'],
   ['bundle client', 'build/bundle-client.mjs'],
   ['token coverage', 'build/validate-coverage.mjs'],
   ['manifest', 'build/validate-manifest.mjs'],
   ['behaviour', 'build/self-check.mjs'],
+  ['host route', 'build/host-check.mjs'],
 ];
 
 for (const [label, script] of STEPS) {

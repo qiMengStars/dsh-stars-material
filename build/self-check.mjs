@@ -1,18 +1,22 @@
 /**
  * Offline self-check for the shipped Client bundle.
  *
- * Runs `plugin/client.js` against a minimal stub of the loader, of the two
- * services it reads (`theme`, `locale`) and of the DOM calls it makes, then
- * asserts the token map it installs:
+ * Runs `plugin/client.js` against a minimal stub of the loader, of the three
+ * services it reads (`theme`, `locale`, `slots`) and of the DOM calls it makes,
+ * then asserts the layers it installs:
  *
- *   - exactly the 119 product tokens the base stylesheet reads are covered;
+ *   - exactly the product tokens the shipped stylesheets read are covered;
  *   - every value is a `{ light, dark }` pair of non-empty strings;
- *   - colour literals are valid `#rrggbb` / `#rrggbbaa`, derived values are
- *     well-formed `color-mix()` over literals;
- *   - light and dark disagree for the tokens that must differ (surfaces,
- *     labels) and agree for the ones that must not (artwork literals);
+ *   - colours are `#rrggbb` / `#rrggbbaa` / `color-mix()` over literals;
+ *   - the border tokens Material 3 does not draw are `transparent` while the
+ *     one that paints the switch track and the ring gauges stays visible;
+ *   - every elevation and shadow composite resolves to `none`;
+ *   - every state-layer token is an 8%–12% `color-mix()` over the palette;
+ *   - the captured surface ramp strictly descends from lowest to highest;
+ *   - the `--dsh-m3-*` bridge carries both schemes;
  *   - the two theme ids are registered with the matching colour scheme;
- *   - retuning replaces the layer instead of stacking another one.
+ *   - preset mode, system mode, the system-mode fallback and the disabled state
+ *     each install exactly what they should, and every one cleans up.
  *
  *   node build/self-check.mjs
  *
@@ -22,13 +26,13 @@
 
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
 const BUNDLE = resolve(REPO, 'plugin/client.js');
-const CSS_FILE = resolve(REPO, 'vendor/dsh-survey/design-platform.css');
+const SURVEY = resolve(REPO, 'vendor/dsh-survey');
 
 const failures = [];
 let assertions = 0;
@@ -37,23 +41,27 @@ function check(condition, message) {
   if (!condition) failures.push(message);
 }
 
+const SHIPPED_CSS = [
+  'design-platform.css',
+  'base.css',
+  'focus.css',
+  'gradient-shadow-text.css',
+];
+
+/** The colour authority, exactly as `build/validate-coverage.mjs` defines it. */
+const COLOUR_SHEET = 'design-platform.css';
+
 // ---------------------------------------------------------------------------
 // DOM stub — only the calls this bundle actually makes.
 // ---------------------------------------------------------------------------
 
 function createDom() {
   const head = { children: [], appendChild(node) { this.children.push(node); } };
-  const attributes = new Map();
-  const body = {
-    setAttribute: (name, value) => attributes.set(name, value),
-    removeAttribute: (name) => attributes.delete(name),
-    dataset: {},
-  };
   const tags = [];
 
   const document = {
     head,
-    body,
+    body: { dataset: {} },
     querySelector: () => null,
     createElement(tagName) {
       const node = {
@@ -70,7 +78,7 @@ function createDom() {
     },
   };
 
-  return { document, body, attributes, tags };
+  return { document, tags };
 }
 
 // ---------------------------------------------------------------------------
@@ -93,8 +101,6 @@ function createThemeStub() {
   };
 }
 
-const DICTS_KEY = Symbol.for('dsh.material-3.dics');
-
 function createLocaleStub() {
   const dicts = [];
   return {
@@ -109,63 +115,46 @@ function createLocaleStub() {
   };
 }
 
+function createSlotsStub() {
+  const registrations = [];
+  return {
+    __registrations: registrations,
+    inject(key, callback) {
+      callback();
+      return () => {};
+    },
+    register(options, component) {
+      registrations.push({ options, component });
+      return () => {};
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
-// Load the bundle
+// Harness: load the bundle once, then drive `apply` with a fresh context each
+// time so the four scenarios cannot leak into each other.
 // ---------------------------------------------------------------------------
 
 const source = await readFile(BUNDLE, 'utf8');
 const dom = createDom();
-const theme = createThemeStub();
-const locale = createLocaleStub();
-
-const storage = new Map();
-const window = {
-  localStorage: {
-    getItem: (key) => (storage.has(key) ? storage.get(key) : null),
-    setItem: (key, value) => storage.set(key, value),
-  },
-  addEventListener() {},
-  removeEventListener() {},
-};
-
-const effects = [];
-const context = {
-  console,
-  window,
-  document: dom.document,
-};
-
-/** `ctx` as the loader builds it: `get` for optional services, `effect` for cleanup. */
-const ctx = {
-  get(name) {
-    if (name === 'theme') return theme;
-    if (name === 'locale') return locale;
-    return undefined;
-  },
-  effect(callback, label) {
-    const dispose = callback();
-    effects.push({ label, dispose });
-    return dispose;
-  },
-  on() {
-    return () => {};
-  },
-  provide() {
-    return () => {};
-  },
-  console,
-};
 
 let factory;
 const sandbox = {
-  ...context,
-  globalThis: undefined,
-  console,
+  console: { log() {}, warn() {}, error() {} },
   setTimeout,
   clearTimeout,
+  AbortController,
+  URL,
 };
 sandbox.globalThis = sandbox;
-sandbox.window = window;
+sandbox.window = {
+  localStorage: null, // replaced per scenario
+  addEventListener() {},
+  removeEventListener() {},
+  setTimeout,
+  clearTimeout,
+  fetch: null, // replaced per scenario
+};
 sandbox.window.__ModuleLoader__ = {
   load(options) {
     factory = options.factory;
@@ -179,11 +168,11 @@ vm.runInContext(source, sandbox, { filename: 'plugin/client.js' });
 check(typeof factory === 'function', 'the bundle did not call __ModuleLoader__.load');
 if (typeof factory !== 'function') {
   report();
+  process.exit(1);
 }
 
 const plugin = factory((id) => {
   if (id !== 'react') throw new Error(`unexpected require("${id}")`);
-  // The bundle only uses createElement; a pass-through is enough for wiring.
   return {
     createElement: (type, props, ...children) => ({ type, props, children }),
     useState: (initial) => [initial, () => {}],
@@ -195,34 +184,128 @@ check(Array.isArray(plugin.inject), 'the plugin does not declare inject');
 check(plugin.inject.includes('theme'), 'the plugin does not declare the theme service');
 check(typeof plugin.apply === 'function', 'the plugin does not expose apply()');
 
-plugin.apply(ctx);
+/**
+ * Run one scenario.
+ *
+ * @param {object} options
+ * @param {Record<string,string>} options.storage   localStorage seed
+ * @param {Function|null} options.fetch             `window.fetch` replacement
+ */
+async function scenario({ storage, fetch }) {
+  const store = new Map(Object.entries(storage ?? {}));
+  sandbox.window.localStorage = {
+    getItem: (key) => (store.has(key) ? store.get(key) : null),
+    setItem: (key, value) => store.set(key, value),
+  };
+  sandbox.window.fetch = fetch ?? (() => Promise.reject(new Error('no fetch')));
+
+  dom.tags.length = 0;
+
+  const theme = createThemeStub();
+  const locale = createLocaleStub();
+  const slots = createSlotsStub();
+  const effects = [];
+
+  const ctx = {
+    slots,
+    get(name) {
+      if (name === 'theme') return theme;
+      if (name === 'locale') return locale;
+      if (name === 'slots') return slots;
+      return undefined;
+    },
+    effect(callback, label) {
+      const dispose = callback();
+      effects.push({ label, dispose });
+      return dispose;
+    },
+    on() {
+      return () => {};
+    },
+    provide() {
+      return () => {};
+    },
+    console: sandbox.console,
+  };
+
+  plugin.apply(ctx);
+  // System mode resolves across an await; preset mode does not, but awaiting a
+  // microtask is harmless for both and is what makes the assertions reliable.
+  await new Promise((tick) => setImmediate(tick));
+
+  return {
+    theme,
+    locale,
+    slots,
+    effects,
+    store,
+    disposeAll() {
+      for (const effect of effects) {
+        if (typeof effect.dispose === 'function') effect.dispose();
+      }
+    },
+  };
+}
 
 // ---------------------------------------------------------------------------
-// Assertions on what the plugin installed
+// Expected token set
 // ---------------------------------------------------------------------------
 
-const override = theme.calls.overrides[0];
-check(override !== undefined, 'no override layer was installed');
-check(override.source === 'dsh-material-3', `override source is "${override.source}"`);
+/**
+ * The names the colour authority assigns, minus the raw `--dsw-static-*` ramps.
+ *
+ * Only `design-platform.css` defines the colour contract, so only its colour
+ * tokens have to appear in the override layer. Font, radius and easing variables
+ * live in other sheets and stay with the product: this theme has no opinion
+ * about them, and overriding them would make the bundle's scope harder to read.
+ */
+const declared = new Set();
+{
+  const css = await readFile(resolve(SURVEY, COLOUR_SHEET), 'utf8');
+  for (const match of css.matchAll(/(--[a-z0-9-]+)\s*:/g)) declared.add(match[1]);
+}
+const expected = [...declared]
+  .filter((name) => !name.startsWith('--dsw-static-'))
+  .filter((name) => name.startsWith('--dsw-alias-') || name.startsWith('--dsw-specific-'))
+  .sort();
 
-const tokens = override.tokens;
+/** Every name any vendored sheet assigns, plus the ones read through a fallback. */
+const everywhere = new Set(['--dsw-alias-border-selected']);
+for (const name of SHIPPED_CSS) {
+  const css = await readFile(resolve(SURVEY, name), 'utf8');
+  for (const match of css.matchAll(/(--[a-z0-9-]+)\s*:/g)) everywhere.add(match[1]);
+}
+
+// ---------------------------------------------------------------------------
+// Scenario 1: preset mode (synchronous, no Host round trip)
+// ---------------------------------------------------------------------------
+
+const preset = await scenario({
+  storage: { 'dsh.material-3.source': 'preset', 'dsh.material-3.preset': 'baseline' },
+});
+
+check(preset.theme.calls.overrides.length === 2, `expected two override layers, got ${preset.theme.calls.overrides.length}`);
+
+const override = preset.theme.calls.overrides[0];
+check(override?.source === 'dsh-material-3', `override source is "${override?.source}"`);
+const bridge = preset.theme.calls.overrides[1];
+check(bridge?.source === 'dsh-material-3/bridge', `bridge source is "${bridge?.source}"`);
+
+const tokens = override?.tokens ?? {};
 const productNames = Object.keys(tokens).sort();
 
-const css = await readFile(CSS_FILE, 'utf8');
-const declared = new Set();
-for (const match of css.matchAll(/(--[a-z0-9-]+)\s*:/g)) declared.add(match[1]);
-const expected = [...declared].filter((name) => !name.startsWith('--dsw-static-')).sort();
-
 const missing = expected.filter((name) => !productNames.includes(name));
-const invented = productNames.filter((name) => !declared.has(name));
+const invented = productNames.filter((name) => !everywhere.has(name));
 check(missing.length === 0, `tokens missing from the override layer: ${missing.join(', ')}`);
 check(invented.length === 0, `override layer invents tokens: ${invented.join(', ')}`);
 
 const colorLiteral = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/;
-const colorMix = /^color-mix\(in srgb, #(?:[0-9a-f]{6}) \d+%, #(?:[0-9a-f]{6})\)$/;
+const colorMix = /^(?:color-mix\(in srgb, #(?:[0-9a-f]{6}) \d+%, (?:(?:#(?:[0-9a-f]{6}))|transparent)\)|light-dark\(#(?:[0-9a-f]{6}), #(?:[0-9a-f]{6})\))$/;
+const noPaint = new Set(['transparent', 'none']);
 
 let derived = 0;
 let literal = 0;
+let cleared = 0;
 const sameInBothSchemes = [];
 const differInBothSchemes = [];
 
@@ -236,6 +319,10 @@ for (const [name, modes] of Object.entries(tokens)) {
     continue;
   }
   for (const [scheme, value] of [['light', modes.light], ['dark', modes.dark]]) {
+    if (noPaint.has(value)) {
+      cleared += 1;
+      continue;
+    }
     if (colorMix.test(value)) {
       derived += 1;
       continue;
@@ -251,25 +338,110 @@ for (const [name, modes] of Object.entries(tokens)) {
 }
 
 check(derived > 0, 'no color-mix() values were derived');
+check(cleared > 0, 'no token was cleared to transparent/none');
 check(
-  literal + derived === productNames.length * 2,
-  `processed ${literal + derived} values for ${productNames.length} tokens; expected two per token`,
+  literal + derived + cleared === productNames.length * 2,
+  `processed ${literal + derived + cleared} values for ${productNames.length} tokens; expected two per token`,
 );
 
-// Tokens that must be identical in both schemes: artwork and the shape scale.
+// Strokes Material 3 does not draw. `border-l3` is deliberately exempt: it also
+// paints the switch track and the SVG gauge rings, which would disappear.
+for (const name of [
+  '--dsw-alias-border-l1',
+  '--dsw-alias-border-l2',
+  '--dsw-alias-border-l4',
+  '--dsw-alias-border-l2-darkmode-thin',
+  '--dsw-alias-settings-card-stroke',
+  '--dsw-alias-border-selected',
+]) {
+  check(tokens[name]?.light === 'transparent', `${name} must be transparent`);
+}
+check(
+  tokens['--dsw-alias-border-l3']?.light !== 'transparent' &&
+    tokens['--dsw-alias-border-l3']?.dark !== 'transparent',
+  '--dsw-alias-border-l3 must stay visible: it paints the switch track and the ring gauges',
+);
+
+// Elevation is tone, not shadow.
+for (const name of [
+  '--dsw-shadow-lv1',
+  '--dsw-shadow-lv3',
+  '--dsw-elevation-stroke',
+  '--dsw-elevation-panel',
+  '--dsw-elevation-prominent',
+  '--dsw-elevation-soft',
+]) {
+  check(tokens[name]?.light === 'none', `${name} must resolve to none`);
+}
+
+// Hover is a state layer over the surface, never a shadow.
+for (const name of [
+  '--dsw-alias-interactive-bg-hover',
+  '--dsw-alias-interactive-bg-active',
+  '--dsw-alias-button-primary-hover',
+]) {
+  const value = tokens[name]?.light ?? '';
+  check(
+    /^color-mix\(in srgb, #(?:[0-9a-f]{6}) (?:\d+)%, /u.test(value),
+    `${name} must be a state-layer color-mix, got "${value}"`,
+  );
+}
+check(
+  (tokens['--dsw-alias-interactive-bg-hover']?.light ?? '').includes('transparent'),
+  '--dsw-alias-interactive-bg-hover must mix into transparent so it works on any surface',
+);
+
+// Artwork that must not vary, and surfaces that must.
 for (const name of ['--dsw-alias-bg-mask-photo', '--dsw-alias-border-inverted']) {
   check(tokens[name]?.light === tokens[name]?.dark, `${name} must not vary between schemes`);
 }
 check(!sameInBothSchemes.includes('--dsw-alias-bg-base'), '--dsw-alias-bg-base is identical in both schemes');
 check(differInBothSchemes.length > 90, `only ${differInBothSchemes.length} tokens differ between schemes`);
 
+// The captured surface ramp must descend: lowest is the brightest light surface.
+{
+  const ramp = [
+    '--dsw-alias-bg-base',
+    '--dsw-alias-bg-layer-1',
+    '--dsw-alias-bg-layer-2',
+    '--dsw-alias-bg-layer-3',
+    '--dsw-alias-bg-overlay',
+  ];
+  const luminance = (hex) => {
+    const value = Number.parseInt(hex.slice(1, 7), 16);
+    return ((value >> 16) & 0xff) + ((value >> 8) & 0xff) + (value & 0xff);
+  };
+  const lightValues = ramp.map((name) => tokens[name]?.light ?? '#000000');
+  const descending = lightValues.every(
+    (value, index) => index === 0 || luminance(lightValues[index - 1]) >= luminance(value),
+  );
+  check(descending, `the light surface ramp does not descend: ${lightValues.join(' ')}`);
+
+  const darkValues = ramp.map((name) => tokens[name]?.dark ?? '#000000');
+  const ascending = darkValues.every(
+    (value, index) => index === 0 || luminance(darkValues[index - 1]) <= luminance(value),
+  );
+  check(ascending, `the dark surface ramp does not ascend: ${darkValues.join(' ')}`);
+}
+
+// Bridge properties carry both schemes through light-dark().
+const bridgeNames = Object.keys(bridge?.tokens ?? {});
+check(bridgeNames.length >= 15, `only ${bridgeNames.length} bridge properties were published`);
+for (const name of bridgeNames) {
+  check(name.startsWith('--dsh-m3-'), `bridge property "${name}" does not use the --dsh-m3- prefix`);
+  check(
+    /^light-dark\(#(?:[0-9a-f]{6}), #(?:[0-9a-f]{6})\)$/u.test(bridge.tokens[name]?.light ?? ''),
+    `bridge property "${name}" is not a light-dark() pair`,
+  );
+}
+
 // Registered themes.
-const ids = theme.calls.registered.map((entry) => `${entry.id}:${entry.colorScheme}`).sort();
+const ids = preset.theme.calls.registered.map((entry) => `${entry.id}:${entry.colorScheme}`).sort();
 check(
   ids.join(',') === 'material-3-dark:dark,material-3-light:light',
   `registered themes are [${ids.join(', ')}]`,
 );
-for (const entry of theme.calls.registered) {
+for (const entry of preset.theme.calls.registered) {
   const own = Object.keys(entry.tokens);
   const bad = own.filter((name) => !name.startsWith('--dsw-'));
   check(bad.length === 0, `theme "${entry.id}" carries non-product tokens: ${bad.join(', ')}`);
@@ -277,88 +449,130 @@ for (const entry of theme.calls.registered) {
   check(mismatch.length === 0, `theme "${entry.id}" disagrees with the override layer`);
 }
 
-// Locales. The plugin registers one dictionary set: `{ en, zh }`.
-check(locale.__dicts.length === 1, `expected one dictionary set, got ${locale.__dicts.length}`);
-const en = locale.__dicts[0]?.en;
-const zh = locale.__dicts[0]?.zh;
+// Locales.
+check(preset.locale.__dicts.length === 1, `expected one dictionary set, got ${preset.locale.__dicts.length}`);
+const en = preset.locale.__dicts[0]?.en;
+const zh = preset.locale.__dicts[0]?.zh;
 check(en !== undefined && zh !== undefined, 'locale dictionaries are missing');
 if (en && zh) {
-  const enKeys = Object.keys(en).sort();
-  const zhKeys = Object.keys(zh).sort();
   check(
-    enKeys.join(',') === zhKeys.join(','),
+    Object.keys(en).sort().join(',') === Object.keys(zh).sort().join(','),
     'en and zh dictionaries have different keys',
   );
-  check(en['meta.title'] !== undefined || en['nav.title'] !== undefined, 'locale misses nav.title');
+  check(en['page.sourceSystem'] !== undefined, 'locale misses page.sourceSystem');
+  check(!Object.keys(en).some((key) => key.startsWith('variant.')), 'the removed harmony variants are still translated');
 }
 
-// Stylesheet.
+// The settings page is contributed to `settings.section` under its own id.
+check(preset.slots.__registrations.length === 1, `expected one settings section, got ${preset.slots.__registrations.length}`);
+check(
+  preset.slots.__registrations[0]?.options?.id === 'material-3',
+  'the settings section id is not "material-3"',
+);
+check(
+  preset.slots.__registrations[0]?.options?.order === 26,
+  'the settings section order is not 26',
+);
+
+// Stylesheet: one tag, carries the shape scale, the motion curves and the rules.
 check(dom.tags.length === 1, `expected exactly one <style>, got ${dom.tags.length}`);
-check(
-  dom.tags[0]?.textContent.includes('--dsw-radius-panel'),
-  'the shape scale is missing from the injected stylesheet',
-);
-check(
-  dom.tags[0]?.textContent.includes('--dsw-m3-ease-emphasized-decelerate'),
-  'the motion curve is missing from the injected stylesheet',
-);
+const sheet = dom.tags[0]?.textContent ?? '';
+check(sheet.includes('--dsw-radius-panel'), 'the shape scale is missing from the injected stylesheet');
+check(sheet.includes('--dsw-m3-ease-emphasized-decelerate'), 'the motion curve is missing');
+check(sheet.includes('[role="switch"]'), 'the switch repaint rule is missing');
+check(sheet.includes('prefers-reduced-motion'), 'the reduced-motion guard is missing');
+check(!/\._[a-z0-9]+_[a-z0-9]+_\d+/u.test(sheet), 'the stylesheet hardcodes a CSS module hash class');
 
-// Cleanup must remove the stylesheet and both layers.
-for (const effect of effects) {
-  if (typeof effect.dispose === 'function') effect.dispose();
-}
-check(theme.calls.disposed >= 3, `only ${theme.calls.disposed} layers were disposed`);
+preset.disposeAll();
+check(preset.theme.calls.disposed >= 4, `only ${preset.theme.calls.disposed} layers were disposed`);
 check(dom.tags.length === 0, 'the <style> element outlived the plugin');
 
-// Disabling must drop both theme layers and the theme-only stylesheet rules,
-// which is what makes "turn it off" actually restore the previous look.
-{
-  dom.tags.length = 0;
-  effects.length = 0;
-  const off = createThemeStub();
-  const offLocale = createLocaleStub();
-  storage.clear();
-  storage.set('dsh.material-3.enabled', '0');
-  const offCtx = {
-    get: (name) => (name === 'theme' ? off : name === 'locale' ? offLocale : undefined),
-    effect: (callback, label) => {
-      const dispose = callback();
-      effects.push({ label, dispose });
-      return dispose;
-    },
-    console,
-  };
-  plugin.apply(offCtx);
-  check(off.calls.overrides.length === 0, 'a disabled theme still installed an override layer');
-  check(off.calls.registered.length === 0, 'a disabled theme still registered a theme');
-  check(dom.tags.length === 1, 'the settings stylesheet must stay present while disabled');
-  check(
-    !dom.tags[0].textContent.includes('--dsw-radius-panel'),
-    'theme-only rules leaked into the disabled stylesheet',
-  );
-  check(
-    dom.tags[0].textContent.includes('.-page') || dom.tags[0].textContent.includes('-page'),
-    'the settings stylesheet disappeared while disabled',
-  );
-  for (const effect of effects) {
-    if (typeof effect.dispose === 'function') effect.dispose();
-  }
-  check(dom.tags.length === 0, 'the disabled stylesheet outlived the plugin');
-  storage.clear();
-}
+// ---------------------------------------------------------------------------
+// Scenario 2: system mode with a Host answer
+// ---------------------------------------------------------------------------
+
+const ANSWER = {
+  ok: true,
+  seed: '#00639b',
+  light: 'a'.repeat(270),
+  dark: 'b'.repeat(270),
+  appsUseLightTheme: true,
+};
+
+const system = await scenario({
+  storage: { 'dsh.material-3.source': 'system' },
+  fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve(ANSWER) }),
+});
+
+check(system.theme.calls.overrides.length === 2, 'system mode did not install both override layers');
+check(
+  system.theme.calls.registered.length === 2,
+  `system mode registered ${system.theme.calls.registered.length} themes`,
+);
+// 'a' is not a colour; every role must still come out as a well-formed literal.
+const systemTokens = system.theme.calls.overrides[0]?.tokens ?? {};
+check(
+  systemTokens['--dsw-alias-bg-base']?.light === '#aaaaaa',
+  `system mode did not use the Host palette: "${systemTokens['--dsw-alias-bg-base']?.light}"`,
+);
+const state = system.slots.__registrations[0]?.options?.inject?.()?.state;
+check(state?.systemSeed === '#00639b', `the settings page does not show the system seed: "${state?.systemSeed}"`);
+system.disposeAll();
+check(dom.tags.length === 0, 'the system-mode stylesheet outlived the plugin');
+
+// ---------------------------------------------------------------------------
+// Scenario 3: system mode when the Host is unavailable
+// ---------------------------------------------------------------------------
+
+const fallback = await scenario({
+  storage: { 'dsh.material-3.source': 'system' },
+  fetch: () => Promise.reject(new Error('ECONNREFUSED')),
+});
+
+check(fallback.theme.calls.overrides.length === 2, 'the fallback did not install both override layers');
+const fallbackState = fallback.slots.__registrations[0]?.options?.inject?.()?.state;
+check(
+  fallbackState?.systemSeed === null,
+  'the settings page must report that no system colour is available',
+);
+check(
+  fallback.theme.calls.overrides[0]?.tokens?.['--dsw-alias-bg-base']?.light === '#fdf7ff',
+  'the fallback palette is not the Material baseline',
+);
+fallback.disposeAll();
+check(dom.tags.length === 0, 'the fallback stylesheet outlived the plugin');
+
+// ---------------------------------------------------------------------------
+// Scenario 4: disabled
+// ---------------------------------------------------------------------------
+
+const off = await scenario({
+  storage: { 'dsh.material-3.enabled': '0', 'dsh.material-3.source': 'preset' },
+});
+
+check(off.theme.calls.overrides.length === 0, 'a disabled theme still installed an override layer');
+check(off.theme.calls.registered.length === 0, 'a disabled theme still registered a theme');
+check(dom.tags.length === 1, 'the settings stylesheet must stay present while disabled');
+const offSheet = dom.tags[0]?.textContent ?? '';
+check(!offSheet.includes('--dsw-radius-panel'), 'theme-only rules leaked into the disabled stylesheet');
+check(offSheet.includes('-page'), 'the settings stylesheet disappeared while disabled');
+off.disposeAll();
+check(dom.tags.length === 0, 'the disabled stylesheet outlived the plugin');
 
 report();
 
 function report() {
   if (failures.length > 0) {
-    console.error(`self-check FAILED (${failures.length})`);
-    for (const failure of failures) console.error(`  - ${failure}`);
+    process.stderr.write(`self-check FAILED (${failures.length} of ${assertions})\n`);
+    for (const failure of failures) process.stderr.write(`  - ${failure}\n`);
     process.exitCode = 1;
     return;
   }
-  console.log(`tokens        ${productNames.length} (${differInBothSchemes.length} differ by scheme)`);
-  console.log(`colours       ${literal} literals, ${derived} derived`);
-  console.log(`themes        ${ids.join(', ')}`);
-  console.log(`locales       en + zh, ${Object.keys(en).length} keys aligned`);
-  console.log('self-check OK');
+  process.stdout.write(`tokens        ${productNames.length} (${differInBothSchemes.length} differ by scheme)\n`);
+  process.stdout.write(`colours       ${literal} literals, ${derived} derived, ${cleared} cleared\n`);
+  process.stdout.write(`bridge        ${bridgeNames.length} --dsh-m3-* properties\n`);
+  process.stdout.write(`themes        ${ids.join(', ')}\n`);
+  process.stdout.write(`locales       en + zh, ${Object.keys(en ?? {}).length} keys aligned\n`);
+  process.stdout.write(`scenarios     preset, system, fallback, disabled (${assertions} assertions)\n`);
+  process.stdout.write('self-check OK\n');
 }

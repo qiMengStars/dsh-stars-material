@@ -1,49 +1,36 @@
 {
   "meta": {
     "title": "Material 3 theme",
-    "description": "Recolours the interface with Material You roles derived from a seed colour."
+    "description": "Material You colours, surface tones instead of borders and state layers instead of shadows."
   },
   "nav": {
     "title": "Material 3"
   },
   "page": {
     "title": "Material 3 theme",
-    "description": "Material You colour roles derived from one seed colour. Light and dark are generated together, so the two palettes always agree.",
+    "description": "Material You colour roles, surface tones instead of borders, and state layers instead of shadows. Light and dark are generated together, so the two palettes always agree.",
     "enabledTitle": "Use Material 3 colours",
     "enabledDescription": "Recolours surfaces, labels, borders and state colours with Material 3 roles. Turn it off to return to the theme you had before.",
     "on": "On",
     "off": "Off",
     "enable": "Enable Material 3",
     "disable": "Disable Material 3",
-    "seedTitle": "Seed colour",
-    "seedDescription": "The source colour the whole palette is derived from.",
-    "variantTitle": "Colour harmony",
-    "variantDescription": "How far the palette departs from the seed. Tonal spot is the Material 3 default; expressive follows the Material 3 Expressive reading.",
+    "sourceTitle": "Colour source",
+    "sourceSystem": "Follow system",
+    "sourcePreset": "Pick a colour",
+    "systemDescription": "Derived from your Windows accent colour.",
+    "systemUnavailable": "No accent colour is set on this system, so the Material baseline palette is used.",
+    "sourcePresetDescription": "One of the eight Material 3 seed colours.",
     "note": "Changes apply immediately and are remembered in this browser, so they survive a reload without restarting the harness."
   },
-  "seed": {
-    "deepseek": "DeepSeek blue",
-    "indigo": "Indigo",
-    "violet": "Violet",
-    "purple": "Purple",
-    "pink": "Pink",
-    "red": "Red",
-    "orange": "Orange",
-    "amber": "Amber",
+  "preset": {
+    "baseline": "Baseline",
+    "blue": "Blue",
     "green": "Green",
     "teal": "Teal",
-    "cyan": "Cyan",
-    "graphite": "Graphite"
-  },
-  "variant": {
-    "tonalSpot": "Tonal spot",
-    "expressive": "Expressive",
-    "vibrant": "Vibrant",
-    "content": "Content",
-    "fidelity": "Fidelity",
-    "neutral": "Neutral",
-    "monochrome": "Monochrome",
-    "rainbow": "Rainbow",
-    "fruitSalad": "Fruit salad"
+    "orange": "Orange",
+    "pink": "Pink",
+    "red": "Red",
+    "blueGrey": "Blue grey"
   }
 }

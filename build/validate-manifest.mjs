@@ -213,13 +213,13 @@ if (await exists(clientPath)) {
   check(!/^\s*export\s+(?:const|let|var|function|class|default)\b/mu.test(client), 'client.js: contains an ESM export statement');
 
   // Hard-coded colours are only acceptable where they cannot follow the theme:
-  // the seed swatches shown in the settings page, and the artwork literals in
-  // the token map. Any other hex value means a palette was pasted in, which
-  // would stop following the active scheme.
-  const { SEEDS } = await import(pathToFileURL(resolve(REPO, 'src/parts/palette-spec.js')).href);
+  // the eight seed swatches drawn in the settings page, and the artwork literals
+  // in the token map. Anything else means a palette was pasted into the bundle,
+  // which would stop following the active scheme.
+  const { PRESETS } = await import(pathToFileURL(resolve(REPO, 'src/parts/palette-spec.js')).href);
   const { LITERAL_TOKENS } = await import(pathToFileURL(resolve(REPO, 'src/parts/token-map.js')).href);
   const allowedHex = new Set([
-    ...SEEDS.map((seed) => seed.hex.toLowerCase()),
+    ...PRESETS.map((preset) => preset.hex.toLowerCase()),
     ...Object.values(LITERAL_TOKENS).map((value) => value.toLowerCase()),
   ]);
   const hexLiterals = [...new Set((client.match(/#[0-9a-f]{6}(?:[0-9a-f]{2})?/giu) ?? []).map((value) => value.toLowerCase()))];

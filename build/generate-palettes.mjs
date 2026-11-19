@@ -3,15 +3,18 @@
  *
  * Reads the vendored Material Color Utilities checkout under
  * `vendor/material-color-utilities` and emits `src/generated/palettes.js`: a
- * plain JavaScript module holding every palette this plugin can show, so the
- * shipped Client bundle needs no color library at runtime.
+ * plain JavaScript module holding every palette this plugin can show without
+ * asking the operating system, so the Client half needs no color library and
+ * needs no round trip for a preset.
  *
  *   node build/generate-palettes.mjs
  *
+ * Automatic mode ("follow the system accent") is NOT generated here: the Host
+ * half derives it from the operating system at runtime. This file only covers
+ * the eight Material 3 presets the settings page offers in manual mode.
+ *
  * The output shape is deliberately compact — role values are stored as one
- * hex-digit string per palette (45 roles x 6 digits, ROLES order, `#` dropped)
- * because a full 12 seeds x 9 variants x 2 schemes matrix would otherwise be
- * several hundred kilobytes of repeated key names.
+ * hex-digit string per palette (45 roles x 6 digits, ROLES order, `#` dropped).
  *
  * The vendored copy is Material Color Utilities v0.4.0 with `.js` added to its
  * extensionless relative imports; see vendor/material-color-utilities/README.md
@@ -24,10 +27,12 @@ import { fileURLToPath } from 'node:url';
 
 import {
   FIXED_ROLE_ORDER,
+  PRESETS,
   ROLE_ORDER,
-  SEEDS,
-  VARIANTS,
+  VARIANT_CLASS,
+  VARIANT_ID,
 } from '../src/parts/palette-spec.js';
+import { createPaletteEngine } from '../src/parts/palette-engine.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
@@ -35,117 +40,57 @@ const MCU_ENTRY = resolve(REPO, 'vendor/material-color-utilities/index.js');
 const OUT_DIR = resolve(REPO, 'src/generated');
 const OUT_FILE = resolve(OUT_DIR, 'palettes.js');
 
-const {
-  Hct,
-  MaterialDynamicColors,
-  TonalPalette,
-  argbFromHex,
-  SchemeContent,
-  SchemeExpressive,
-  SchemeFidelity,
-  SchemeFruitSalad,
-  SchemeMonochrome,
-  SchemeNeutral,
-  SchemeRainbow,
-  SchemeTonalSpot,
-  SchemeVibrant,
-  hexFromArgb,
-} = await import(`file://${MCU_ENTRY.replaceAll('\\', '/')}`);
+const mcu = await import(`file://${MCU_ENTRY.replaceAll('\\', '/')}`);
+const engine = createPaletteEngine(mcu);
 
-const SCHEME_CLASSES = {
-  SchemeTonalSpot,
-  SchemeExpressive,
-  SchemeVibrant,
-  SchemeContent,
-  SchemeFidelity,
-  SchemeNeutral,
-  SchemeMonochrome,
-  SchemeRainbow,
-  SchemeFruitSalad,
+/** Contrast pairs every generated palette must satisfy. */
+const CONTRAST_PAIRS = [
+  ['onSurface', 'surface'],
+  ['onSurfaceVariant', 'surface'],
+  ['onPrimary', 'primary'],
+  ['onPrimaryContainer', 'primaryContainer'],
+  ['onSecondaryContainer', 'secondaryContainer'],
+  ['onError', 'error'],
+  ['onErrorContainer', 'errorContainer'],
+  ['onSuccessContainer', 'successContainer'],
+  ['onWarningContainer', 'warningContainer'],
+];
+
+/** Text over a surface needs 4.5:1; the rest only has to stay distinguishable. */
+const MIN_CONTRAST = {
+  onSurface: 4.5,
+  onSurfaceVariant: 3,
 };
 
-/** Fixed hues keep success/warning readable regardless of the seed colour. */
-const FIXED_PALETTES = {
-  success: new TonalPalette(145, 48),
-  warning: new TonalPalette(75, 60),
-};
+const ALL_ROLES = [...ROLE_ORDER, 'surfaceTint', ...FIXED_ROLE_ORDER];
 
-/** Tone choices mirror the M3 primary role pattern. */
-const FIXED_TONES = {
-  light: { base: 40, onBase: 100, container: 90, onContainer: 10 },
-  dark: { base: 80, onBase: 20, container: 30, onContainer: 90 },
-};
-
-function fixedRoles(isDark) {
-  const tones = FIXED_TONES[isDark ? 'dark' : 'light'];
-  const tone = (palette, t) => hexFromArgb(FIXED_PALETTES[palette].tone(t));
-  return [
-    tone('success', tones.base),
-    tone('success', tones.onBase),
-    tone('success', tones.container),
-    tone('success', tones.onContainer),
-    tone('warning', tones.base),
-    tone('warning', tones.onBase),
-    tone('warning', tones.container),
-    tone('warning', tones.onContainer),
-  ];
-}
-
-function schemeRoles(scheme) {
-  const values = [];
-  for (const role of ROLE_ORDER) {
-    const argb = scheme[role];
-    if (typeof argb !== 'number') {
-      throw new Error(`scheme missing role "${role}"`);
+function assertContrast(presetId, schemeName, packed) {
+  for (const [foreground, background] of CONTRAST_PAIRS) {
+    const ratio = engine.contrastRatio(
+      engine.unpack(packed, foreground),
+      engine.unpack(packed, background),
+    );
+    const floor = MIN_CONTRAST[foreground] ?? 3;
+    if (ratio < floor) {
+      throw new Error(
+        `preset "${presetId}" ${schemeName}: ${foreground} on ${background} is ` +
+          `${ratio.toFixed(2)}:1, below ${floor}:1`,
+      );
     }
-    values.push(hexFromArgb(argb));
   }
-  const surfaceTint = MaterialDynamicColors.surfaceTint.getArgb(scheme);
-  values.push(hexFromArgb(surfaceTint));
-  return values;
-}
-
-/**
- * Pack one palette into a single hex-digit string.
- *
- * 45 roles x 6 digits x 108 palettes is 9720 values; keeping the `#` and the
- * quoting of an array around every one of them triples the artifact for no
- * benefit. The Client half slices this string back into `#rrggbb` values.
- */
-function pack(values) {
-  return values.map((hex) => hex.slice(1)).join('');
 }
 
 function buildPalettes() {
   const palettes = {};
-  for (const seed of SEEDS) {
-    const argb = argbFromHex(seed.hex);
-    const sourceHct = Hct.fromInt(argb);
-    palettes[seed.id] = {};
-    for (const variant of VARIANTS) {
-      const SchemeClass = SCHEME_CLASSES[variant.mc];
-      if (typeof SchemeClass !== 'function') {
-        throw new Error(`unknown scheme class "${variant.mc}"`);
-      }
-      const light = new SchemeClass(sourceHct, false, 0);
-      const dark = new SchemeClass(sourceHct, true, 0);
-      const lightValues = [...schemeRoles(light), ...fixedRoles(false)];
-      const darkValues = [...schemeRoles(dark), ...fixedRoles(true)];
-      for (const value of [...lightValues, ...darkValues]) {
-        if (!/^#[0-9a-f]{6}$/u.test(value)) {
-          throw new Error(`unexpected role value "${value}"`);
-        }
-      }
-      palettes[seed.id][variant.id] = {
-        light: pack(lightValues),
-        dark: pack(darkValues),
-      };
-    }
+  for (const preset of PRESETS) {
+    const palette = engine.paletteFromSeed(preset.hex);
+    assertContrast(preset.id, 'light', palette.light);
+    assertContrast(preset.id, 'dark', palette.dark);
+    palettes[preset.id] = palette;
   }
   return palettes;
 }
 
-const ALL_ROLES = [...ROLE_ORDER, 'surfaceTint', ...FIXED_ROLE_ORDER];
 const palettes = buildPalettes();
 
 const banner = `/**
@@ -158,18 +103,19 @@ const banner = `/**
  *
  *   node build/generate-palettes.mjs
  *
- * Values are 12 seeds x 9 variants x 2 schemes = 108 palettes of 45 roles.
+ * \`PRESET_TABLE\` is keyed by preset id and holds both schemes. The preset LIST
+ * (ids, seeds, labels) lives in \`src/parts/palette-spec.js\` so the settings
+ * page and this artifact can never disagree about which presets exist.
+ *
+ * Values are ${PRESETS.length} Material 3 presets x 2 schemes = ${PRESETS.length * 2} palettes of ${ALL_ROLES.length} roles,
+ * all derived through the single "${VARIANT_ID}" (${VARIANT_CLASS}) harmony.
  */`;
 
 const body = `${banner}
 
 export const ROLES = ${JSON.stringify(ALL_ROLES)};
 
-export const SEEDS = ${JSON.stringify(SEEDS)};
-
-export const VARIANTS = ${JSON.stringify(VARIANTS.map(({ id, label }) => ({ id, label })))};
-
-export const PALETTES = ${JSON.stringify(palettes)};
+export const PRESET_TABLE = ${JSON.stringify(palettes)};
 `;
 
 await mkdir(OUT_DIR, { recursive: true });
@@ -177,4 +123,4 @@ await writeFile(OUT_FILE, body, 'utf8');
 
 const bytes = Buffer.byteLength(body, 'utf8');
 console.log(`wrote ${OUT_FILE} (${bytes} bytes)`);
-console.log(`seeds=${SEEDS.length} variants=${VARIANTS.length} roles=${ALL_ROLES.length}`);
+console.log(`presets=${PRESETS.length} roles=${ALL_ROLES.length} harmony=${VARIANT_ID}`);
