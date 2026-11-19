@@ -4,24 +4,38 @@
  * The published package is ESM whose relative imports omit the `.js`
  * extension, which Node refuses to resolve, so the repository keeps a patched
  * copy under `vendor/material-color-utilities`. This script reproduces it from
- * a freshly installed package:
+ * a freshly installed package. Install the package anywhere writable (a scratch
+ * directory outside the repo is fine) and pass its path:
  *
- *   cmd /c "npm install @material/material-color-utilities@0.4.0 --no-audit --no-fund --ignore-scripts --cache .tmp/npm-cache --prefix .tmp/mcu"
- *   node build/vendor-mcu.mjs
+ *   cmd /c "npm install @material/material-color-utilities@0.4.0 --no-audit --no-fund --ignore-scripts --cache %TEMP%\mcu-cache --prefix %TEMP%\mcu"
+ *   node build/vendor-mcu.mjs %TEMP%\mcu\node_modules\@material\material-color-utilities
  *
- * The vendored tree it writes is what `build/generate-palettes.mjs` loads, so
- * the palette pipeline works with `.tmp/` deleted. Material Color Utilities is
- * Apache-2.0; its LICENSE file is copied alongside.
+ * With no argument it falls back to `.tmp/mcu/node_modules/@material/material-color-utilities`
+ * for convenience. The vendored tree it writes is what
+ * `build/generate-palettes.mjs` loads, so the palette pipeline needs nothing
+ * outside the repository. Material Color Utilities is Apache-2.0; its LICENSE
+ * file is copied alongside.
  */
 
-import { cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
-const SOURCE = resolve(REPO, '.tmp/mcu/node_modules/@material/material-color-utilities');
 const TARGET = resolve(REPO, 'vendor/material-color-utilities');
+const SOURCE = resolve(
+  REPO,
+  process.argv[2] ?? '.tmp/mcu/node_modules/@material/material-color-utilities',
+);
+
+try {
+  await stat(join(SOURCE, 'index.js'));
+} catch {
+  process.stderr.write('no Material Color Utilities package at ' + SOURCE + '\n');
+  process.stderr.write('pass its path: node build/vendor-mcu.mjs <package-dir>\n');
+  process.exit(1);
+}
 
 const RELATIVE = /(from\s*|import\s*|export\s*\*\s*from\s*)(['"])(\.\.?\/[^'"]*)\2/g;
 const BARE = /^(\s*import\s*)(['"])(\.\.?\/[^'"]*)\2/gm;

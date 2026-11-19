@@ -28,7 +28,7 @@ import vm from 'node:vm';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
 const BUNDLE = resolve(REPO, 'plugin/client.js');
-const CSS_FILE = resolve(REPO, '.tmp/design-platform.css');
+const CSS_FILE = resolve(REPO, 'vendor/dsh-survey/design-platform.css');
 
 const failures = [];
 let assertions = 0;
