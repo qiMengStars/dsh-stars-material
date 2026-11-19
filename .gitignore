@@ -2,6 +2,7 @@
 # Everything here is regenerable and is deleted before handoff.
 .tmp/
 .tmp-*
+.tmp-analysis/
 *.tmp
 
 # Editor and OS noise

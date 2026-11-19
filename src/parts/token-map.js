@@ -20,7 +20,11 @@ export const ROLE_TOKENS = {
   '--dsw-alias-label-primary': 'onSurface',
   '--dsw-alias-label-primary-dimmed': 'onSurface',
   '--dsw-alias-label-secondary': 'onSurfaceVariant',
-  '--dsw-alias-label-tertiary': 'outline',
+  // Tertiary labels are the most-used secondary ink in the product (430 rules:
+  // timestamps, placeholders, hints). M3 pairs that ink with on-surface-variant;
+  // `outline` is reserved for the boundary of a control and is too light for
+  // 12px text on a container tone.
+  '--dsw-alias-label-tertiary': 'onSurfaceVariant',
   '--dsw-alias-label-caption': 'onSurfaceVariant',
   '--dsw-alias-label-dimmed': 'outlineVariant',
   '--dsw-alias-menu-icon': 'onSurfaceVariant',
@@ -34,11 +38,6 @@ export const ROLE_TOKENS = {
   '--dsw-alias-bg-module-platform': 'surfaceContainer',
   '--dsw-alias-bg-multi-select': 'surfaceContainerHigh',
   '--dsw-alias-bg-overlay': 'surfaceContainerHighest',
-
-  // `border-l3` stays visible on purpose. It is not only a border: the switch
-  // track, two SVG gauge rings, four hairline dividers and the whole elevation
-  // composite read it, and none of those can be rescued by a stable selector.
-  '--dsw-alias-border-l3': 'outlineVariant',
 
   '--dsw-alias-button-info-fill': 'primary',
   '--dsw-alias-state-error-primary': 'error',
@@ -76,7 +75,11 @@ export const ROLE_TOKENS = {
   '--dsw-alias-menu-group-header-fill': 'surfaceContainerHighest',
   '--dsw-alias-button-ghost-active-fill': 'surfaceContainerHigh',
   '--dsw-alias-button-ghost-active-hover': 'surfaceContainerHighest',
-  '--dsw-alias-button-elevated-fill': 'surfaceContainerLow',
+  // The elevated/tonal button is the filled tonal variant: Material 3 fills it
+  // with the secondary container so it reads as a control on a page that is
+  // already a container. It used to share its fill with the sidebar, which made
+  // the New Session action invisible (same tone as the surface behind it).
+  '--dsw-alias-button-elevated-fill': 'secondaryContainer',
   '--dsw-alias-button-floating-fill': 'surfaceContainer',
   '--dsw-alias-button-floating-hover': 'surfaceContainerHigh',
   '--dsw-alias-button-contrast-fill': 'inverseSurface',
@@ -151,6 +154,13 @@ export const CLEARED_TOKENS = [
   '--dsw-alias-border-l1',
   '--dsw-alias-border-l2',
   '--dsw-alias-border-l2-darkmode-thin',
+  // `border-l3` is the last visible outline: the "new session" button, the file
+  // tree pane edges and 68 further borders read it. Four rules also use it as a
+  // *fill* — the switch track, three hairline dividers — and two SVG gauges use
+  // it as a stroke. Clearing it is the only way to reach zero outlines; the
+  // fills are repainted from `--dsh-m3-outline-variant` in src/client/stylesheet.js
+  // and the two gauge tracks stay legible through their foreground arc and label.
+  '--dsw-alias-border-l3',
   '--dsw-alias-border-l4',
   '--dsw-alias-settings-card-stroke',
   '--dsw-alias-button-ghost-active-border',

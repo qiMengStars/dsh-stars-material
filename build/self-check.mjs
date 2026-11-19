@@ -138,11 +138,31 @@ function createSlotsStub() {
 const source = await readFile(BUNDLE, 'utf8');
 const dom = createDom();
 
+/**
+ * Timer queue.
+ *
+ * The Client half retries the accent-colour question on a backoff, so a scenario
+ * that answers "the Host is down" now schedules work instead of finishing inside
+ * one microtask. Driving those timers by hand keeps the check fast and makes the
+ * retry order observable.
+ */
+const timers = [];
+let nextTimerId = 1;
+const queueTimer = (callback) => {
+  const id = nextTimerId++;
+  timers.push({ id, callback });
+  return id;
+};
+const dropTimer = (id) => {
+  const entry = timers.find((timer) => timer.id === id);
+  if (entry !== undefined) entry.callback = null;
+};
+
 let factory;
 const sandbox = {
   console: { log() {}, warn() {}, error() {} },
-  setTimeout,
-  clearTimeout,
+  setTimeout: queueTimer,
+  clearTimeout: dropTimer,
   AbortController,
   URL,
 };
@@ -151,8 +171,8 @@ sandbox.window = {
   localStorage: null, // replaced per scenario
   addEventListener() {},
   removeEventListener() {},
-  setTimeout,
-  clearTimeout,
+  setTimeout: queueTimer,
+  clearTimeout: dropTimer,
   fetch: null, // replaced per scenario
 };
 sandbox.window.__ModuleLoader__ = {
@@ -199,6 +219,14 @@ async function scenario({ storage, fetch }) {
   };
   sandbox.window.fetch = fetch ?? (() => Promise.reject(new Error('no fetch')));
 
+  /** Number of times the Client asked the Host for the accent palette. */
+  let attempts = 0;
+  const hostFetch = sandbox.window.fetch;
+  sandbox.window.fetch = (...args) => {
+    attempts += 1;
+    return hostFetch(...args);
+  };
+
   dom.tags.length = 0;
 
   const theme = createThemeStub();
@@ -233,12 +261,33 @@ async function scenario({ storage, fetch }) {
   // microtask is harmless for both and is what makes the assertions reliable.
   await new Promise((tick) => setImmediate(tick));
 
+  /**
+   * Drive the retry backoff to exhaustion.
+   *
+   * Without this the assertions would see the mid-flight state — the layers from
+   * the previous palette — instead of the settled one, which is what a user
+   * actually ends up looking at.
+   */
+  const settle = async () => {
+    for (let round = 0; round < 8; round += 1) {
+      await new Promise((tick) => setImmediate(tick));
+      const pending = timers.splice(0, timers.length);
+      if (pending.length === 0) return;
+      for (const timer of pending) {
+        if (typeof timer.callback === 'function') timer.callback();
+      }
+    }
+  };
+  await settle();
+
   return {
     theme,
     locale,
     slots,
     effects,
     store,
+    settle,
+    attempts: () => attempts,
     disposeAll() {
       for (const effect of effects) {
         if (typeof effect.dispose === 'function') effect.dispose();
@@ -344,11 +393,14 @@ check(
   `processed ${literal + derived + cleared} values for ${productNames.length} tokens; expected two per token`,
 );
 
-// Strokes Material 3 does not draw. `border-l3` is deliberately exempt: it also
-// paints the switch track and the SVG gauge rings, which would disappear.
+// Strokes Material 3 does not draw. Every border token goes transparent, `l3`
+// included: the four rules that painted a *fill* with it are repainted from the
+// bridge variables in the stylesheet, and the two SVG gauge tracks keep their
+// foreground arc and label.
 for (const name of [
   '--dsw-alias-border-l1',
   '--dsw-alias-border-l2',
+  '--dsw-alias-border-l3',
   '--dsw-alias-border-l4',
   '--dsw-alias-border-l2-darkmode-thin',
   '--dsw-alias-settings-card-stroke',
@@ -356,11 +408,6 @@ for (const name of [
 ]) {
   check(tokens[name]?.light === 'transparent', `${name} must be transparent`);
 }
-check(
-  tokens['--dsw-alias-border-l3']?.light !== 'transparent' &&
-    tokens['--dsw-alias-border-l3']?.dark !== 'transparent',
-  '--dsw-alias-border-l3 must stay visible: it paints the switch track and the ring gauges',
-);
 
 // Elevation is tone, not shadow.
 for (const name of [
@@ -539,8 +586,39 @@ check(
   fallback.theme.calls.overrides[0]?.tokens?.['--dsw-alias-bg-base']?.light === '#fdf7ff',
   'the fallback palette is not the Material baseline',
 );
+check(
+  fallback.attempts() === 4,
+  `a Host that never answers must be retried four times, not ${fallback.attempts()}`,
+);
 fallback.disposeAll();
 check(dom.tags.length === 0, 'the fallback stylesheet outlived the plugin');
+
+// A first attempt that fails must not be final: the next retry upgrades the
+// layers instead of leaving the baseline palette in place for the session.
+const recovered = await scenario({
+  storage: { 'dsh.material-3.source': 'system' },
+  fetch: (() => {
+    let calls = 0;
+    return () => {
+      calls += 1;
+      return calls === 1
+        ? Promise.reject(new Error('ECONNREFUSED'))
+        : Promise.resolve({ ok: true, json: () => Promise.resolve(ANSWER) });
+    };
+  })(),
+});
+check(recovered.attempts() >= 2, `the Host was only asked ${recovered.attempts()} times`);
+// The last install contributes two layers: tokens first, then the bridge pairs.
+check(
+  recovered.theme.calls.overrides.at(-2)?.tokens?.['--dsw-alias-bg-base']?.light === '#aaaaaa',
+  'a retry that succeeds did not replace the fallback palette',
+);
+const recoveredState = recovered.slots.__registrations[0]?.options?.inject?.()?.state;
+check(
+  recoveredState?.systemSeed === '#00639b',
+  `the recovered seed is not reported: "${recoveredState?.systemSeed}"`,
+);
+recovered.disposeAll();
 
 // ---------------------------------------------------------------------------
 // Scenario 4: disabled

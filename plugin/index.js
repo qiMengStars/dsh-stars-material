@@ -113,12 +113,28 @@ function isSameOrigin(request, readOrigin) {
   }
 
   const expected = origin.replace(/^https?:\/\//u, '').replace(/\/$/u, '');
-  if (host === expected) return true;
+  const localHosts = [expected];
   try {
-    return host === `localhost:${new URL(origin).port}`;
+    localHosts.push(`localhost:${new URL(origin).port}`);
   } catch {
-    return false;
+    // A malformed origin leaves only the exact host to compare against.
   }
+
+  // The `Host` check is the DNS-rebinding guard. A page served from another
+  // site still reaches a loopback listener with a matching `Host`, so any
+  // `Origin` that is present has to name this harness as well.
+  const originHeader = request.headers.origin;
+  if (typeof originHeader === 'string') {
+    let sender;
+    try {
+      sender = new URL(originHeader).host;
+    } catch {
+      return false;
+    }
+    if (!localHosts.includes(sender)) return false;
+  }
+
+  return localHosts.includes(host);
 }
 
 /** Run `reg query` for one value and return its DWORD, or `null`. */

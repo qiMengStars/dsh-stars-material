@@ -156,6 +156,11 @@ const BRIDGE_ROLES = [
   { variable: '--dsh-m3-primary', role: 'primary' },
   { variable: '--dsh-m3-on-primary', role: 'onPrimary' },
   { variable: '--dsh-m3-primary-container', role: 'primaryContainer' },
+  // The selected-row fill and the filled tonal button both need the second
+  // container tone; without these two the sheet could only borrow `primary`,
+  // which is the wrong role for a container.
+  { variable: '--dsh-m3-secondary-container', role: 'secondaryContainer' },
+  { variable: '--dsh-m3-on-secondary-container', role: 'onSecondaryContainer' },
   { variable: '--dsh-m3-error', role: 'error' },
   { variable: '--dsh-m3-on-error', role: 'onError' },
   { variable: '--dsh-m3-success', role: 'success' },
@@ -185,7 +190,11 @@ const ROLE_TOKENS = {
   '--dsw-alias-label-primary': 'onSurface',
   '--dsw-alias-label-primary-dimmed': 'onSurface',
   '--dsw-alias-label-secondary': 'onSurfaceVariant',
-  '--dsw-alias-label-tertiary': 'outline',
+  // Tertiary labels are the most-used secondary ink in the product (430 rules:
+  // timestamps, placeholders, hints). M3 pairs that ink with on-surface-variant;
+  // `outline` is reserved for the boundary of a control and is too light for
+  // 12px text on a container tone.
+  '--dsw-alias-label-tertiary': 'onSurfaceVariant',
   '--dsw-alias-label-caption': 'onSurfaceVariant',
   '--dsw-alias-label-dimmed': 'outlineVariant',
   '--dsw-alias-menu-icon': 'onSurfaceVariant',
@@ -199,11 +208,6 @@ const ROLE_TOKENS = {
   '--dsw-alias-bg-module-platform': 'surfaceContainer',
   '--dsw-alias-bg-multi-select': 'surfaceContainerHigh',
   '--dsw-alias-bg-overlay': 'surfaceContainerHighest',
-
-  // `border-l3` stays visible on purpose. It is not only a border: the switch
-  // track, two SVG gauge rings, four hairline dividers and the whole elevation
-  // composite read it, and none of those can be rescued by a stable selector.
-  '--dsw-alias-border-l3': 'outlineVariant',
 
   '--dsw-alias-button-info-fill': 'primary',
   '--dsw-alias-state-error-primary': 'error',
@@ -241,7 +245,11 @@ const ROLE_TOKENS = {
   '--dsw-alias-menu-group-header-fill': 'surfaceContainerHighest',
   '--dsw-alias-button-ghost-active-fill': 'surfaceContainerHigh',
   '--dsw-alias-button-ghost-active-hover': 'surfaceContainerHighest',
-  '--dsw-alias-button-elevated-fill': 'surfaceContainerLow',
+  // The elevated/tonal button is the filled tonal variant: Material 3 fills it
+  // with the secondary container so it reads as a control on a page that is
+  // already a container. It used to share its fill with the sidebar, which made
+  // the New Session action invisible (same tone as the surface behind it).
+  '--dsw-alias-button-elevated-fill': 'secondaryContainer',
   '--dsw-alias-button-floating-fill': 'surfaceContainer',
   '--dsw-alias-button-floating-hover': 'surfaceContainerHigh',
   '--dsw-alias-button-contrast-fill': 'inverseSurface',
@@ -316,6 +324,13 @@ const CLEARED_TOKENS = [
   '--dsw-alias-border-l1',
   '--dsw-alias-border-l2',
   '--dsw-alias-border-l2-darkmode-thin',
+  // `border-l3` is the last visible outline: the "new session" button, the file
+  // tree pane edges and 68 further borders read it. Four rules also use it as a
+  // *fill* — the switch track, three hairline dividers — and two SVG gauges use
+  // it as a stroke. Clearing it is the only way to reach zero outlines; the
+  // fills are repainted from `--dsh-m3-outline-variant` in src/client/stylesheet.js
+  // and the two gauge tracks stay legible through their foreground arc and label.
+  '--dsw-alias-border-l3',
   '--dsw-alias-border-l4',
   '--dsw-alias-settings-card-stroke',
   '--dsw-alias-button-ghost-active-border',
@@ -473,8 +488,8 @@ const MOTION_TOKENS = {
  *
  *   1. **Paint that was a border colour.** Several dividers, the progress track
  *      and the table separators painted themselves with `--dsw-alias-border-l1`
- *      / `l2` / `l4`. Those tokens are transparent now, so the handful of cases
- *      with a stable selector are redrawn with the surface ramp instead.
+ *      / `l2` / `l3` / `l4`. Those tokens are transparent now, so the handful of
+ *      cases with a stable selector are redrawn with the surface ramp instead.
  *   2. **Declarations that must disappear.** Material 3 does not draw a stroke
  *      around a text field or an error badge, so the border declarations are
  *      zeroed. Only `border*` is touched — never `outline`, which belongs to
@@ -538,11 +553,11 @@ progress::-webkit-progress-bar {
   border-radius: 999px;
 }
 
-/* The switch track is already visible: it reads --dsw-alias-border-l3, which
- * this theme keeps. It only needs the Material 3 off-state tone and an
- * on-state that stays legible in both palettes. */
+/* The switch track painted itself with the border-l3 token, which is transparent
+ * in this theme, so the track is redrawn from the outline-variant tone: visible
+ * enough to read as a track, quiet enough to stay a control rather than a rule. */
 [role="switch"][aria-checked="false"] {
-  background: var(--dsh-m3-surface-container-highest);
+  background: var(--dsh-m3-outline-variant);
 }
 
 [role="switch"][aria-checked="true"] {
@@ -552,6 +567,19 @@ progress::-webkit-progress-bar {
 /* Table rows that used to be separated by a 1dp hairline. */
 tr[data-turn-start="true"]:not(:first-child) > td {
   box-shadow: inset 0 1px 0 var(--dsh-m3-outline-variant);
+}
+
+/* ---------------------------------------------------------------------------
+ * 1b. Selected rows carry a container tone
+ * ------------------------------------------------------------------------- */
+
+/* The product paints a selected session row with the same token it uses for a
+ * hovered one, so the two states are indistinguishable and hovering looks
+ * stronger than being selected (an 8% state layer over the column tone is
+ * darker than the row's resting fill). Material 3 separates them by role:
+ * hover is a state layer on the surface, selection is a container tone. */
+[role="treeitem"][aria-selected="true"] {
+  background-color: var(--dsh-m3-secondary-container);
 }
 
 /* ---------------------------------------------------------------------------
@@ -674,6 +702,9 @@ const HOST_PALETTE_ROUTE = '/material-3/palette';
 
 /** A Host round trip that has not answered by now is not worth waiting for. */
 const HOST_TIMEOUT_MS = 1500;
+
+/** Retry schedule for the accent-colour question, in milliseconds. */
+const HOST_RETRY_MS = [0, 2000, 6000, 15000];
 
 const ROLE_INDEX = new Map(ROLES.map((role, index) => [role, index]));
 const PRESET_INDEX = new Map(PRESETS.map((preset) => [preset.id, preset]));
@@ -922,7 +953,8 @@ const SETTINGS_STYLE = `
   gap: 8px;
   display: inline-flex;
   border: 0;
-  border-radius: var(--dsw-radius-xl);
+  /* Material 3 chips are 8dp rounded rectangles, not capsules. */
+  border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
   font: inherit;
@@ -1273,26 +1305,60 @@ function applyClient(ctx) {
     publish();
   };
 
-  /** Resolve the palette for `preference.source`, then install it. */
-  const resolve = async () => {
-    if (preference.source === SOURCE_PRESET) {
-      resolved = presetPalette(preference.preset);
-      install();
-      return;
-    }
+  /** Handle of the pending accent-colour retry, so a retune can cancel it. */
+  let retryTimer = null;
 
+  const cancelRetry = () => {
+    if (retryTimer !== null) {
+      window.clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+  };
+
+  /**
+   * Ask the Host for the accent palette, retrying a few times.
+   *
+   * The Host route is registered while the Host half loads, and a page can be
+   * ready before that happens — a slow first boot, or a reload that runs the
+   * new Client against the previous Host generation. One failed attempt must not
+   * pin the theme to the baseline palette for the rest of the session, so the
+   * question is repeated on a short backoff before the fallback is accepted as
+   * final.
+   */
+  const resolveSystem = async (attempt) => {
+    retryTimer = null;
     try {
       const answer = await fetchSystemPalette();
       resolved = answer.palette;
       published.systemSeed = answer.seed;
+      install();
+      return;
     } catch (error) {
+      const next = attempt + 1;
+      if (next < HOST_RETRY_MS.length) {
+        retryTimer = window.setTimeout(() => {
+          void resolveSystem(next);
+        }, HOST_RETRY_MS[next]);
+        return;
+      }
       // Falling back keeps the theme usable: the Material baseline palette is
       // still a correct Material 3 palette, just not the user's own colour.
       console.warn('Material 3 theme: system accent colour unavailable, using baseline', error);
       resolved = presetPalette(DEFAULT_PRESET);
       published.systemSeed = null;
+      install();
     }
-    install();
+  };
+
+  /** Resolve the palette for `preference.source`, then install it. */
+  const resolve = async () => {
+    cancelRetry();
+    if (preference.source === SOURCE_PRESET) {
+      resolved = presetPalette(preference.preset);
+      install();
+      return;
+    }
+    await resolveSystem(0);
   };
 
   const retune = (next) => {
@@ -1351,10 +1417,11 @@ function applyClient(ctx) {
     return () => window.removeEventListener('storage', onStorage);
   }, NS + ' storage');
 
+  ctx.effect(() => () => cancelRetry(), NS + ' palette retry');
+
   // Automatic mode is the default, so the first resolution runs on load.
   void resolve();
 }
-
 const DICTS = {
   en: {
     'nav.title': 'Material 3',

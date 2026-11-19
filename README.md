@@ -1,88 +1,110 @@
 # Material 3 theme for the DeepSeek Harness
 
-A Material 3 / Material You theme for the DSH desktop web UI. One seed colour
-produces a complete Material 3 role set, with light and dark generated together
-so the two palettes always agree.
+A Material You (Material 3) UI theme for the DeepSeek Harness. It is not a colour
+swap: the theme repaints the harness with Material 3 roles, replaces borders with
+a surface tone ramp, and replaces shadows with state layers.
 
-```
-设置 → Material 3
-```
+Open **Settings → Material 3** to switch it on and pick a colour source.
 
 ## What it changes
 
-- **Colour** — the 119 `--dsw-alias-*` / `--dsw-specific-*` tokens the product
-  actually reads are recoloured from Material 3 roles
-  (`surface`, `onSurface`, `primaryContainer`, `outlineVariant`, …).
-- **Shape** — the six radius steps are aligned to the Material 3 shape scale.
-- **Motion** — Material 3 standard / emphasized easing curves, with an
-  automatic `prefers-reduced-motion` fallback.
-- **Focus** — a 2dp Material focus ring instead of the default outline.
-
-It never touches UI structure: no new DOM outside one `<style>` element, no
-app-root replacement, no iframes, and no import of any Harness Client package.
+- **Colour** — 164 `--dsw-*` product tokens are overridden with `{ light, dark }`
+  pairs derived from 45 Material 3 roles. Light and dark are generated together
+  from one seed, so the two schemes always agree.
+- **Hierarchy** — borders are gone. Eleven stroke tokens resolve to `transparent`,
+  and the hierarchy they used to express is carried by the six-step surface ramp
+  (`surface` → `surfaceContainerLow` → … → `surfaceContainerHighest`).
+- **Interaction** — shadows are gone too: the seven elevation tokens resolve to
+  `none`. Hover and pressed states are `on-surface` state layers
+  (`color-mix(in srgb, <onSurface> 8%, transparent)` for hover, 12 % for pressed),
+  and selected rows are a separate container tone.
+- **Shape and motion** — one injected `<style>` sets the six-step radius scale
+  (4/8/12/16/20/28 px) and the motion curves the token registry cannot carry.
+- **Dynamic colour** — in "follow system" mode the Host half reads the Windows
+  accent colour (Electron API, falling back to the registry) and derives all 45
+  Material 3 roles with Material Color Utilities.
 
 ## Settings
 
-| Control | Effect |
+| Control | Values |
 | --- | --- |
-| Use Material 3 colours | Turn the whole theme on or off. Off restores the previous look exactly. |
-| Seed colour | Twelve seeds. `deepseek` (`#4176e6`) is the DSH brand blue; `purple` (`#6750a4`) is the Material baseline. |
-| Scheme variant | Nine Material 3 harmonisation strategies — `TonalSpot` (baseline), `Expressive` (Material 3 Expressive), `Vibrant`, `Content`, `Fidelity`, `Neutral`, `Monochrome`, `Rainbow`, `FruitSalad`. |
+| Enable switch | on / off — off restores the previous look exactly |
+| Colour source | **Follow system** (Windows accent colour) / **Pick a colour** |
+| Preset | eight Material 3 seed colours, shown when "Pick a colour" is selected |
 
-Choices persist in `localStorage` under `dsh.material-3.*`. That is deliberate:
-`theme.setTheme` only writes built-in preferences (`light` / `dark` / `system`)
-back to settings, so a third-party theme id would not survive a restart on its
-own.
+The eight presets are `baseline` `#6750a4`, `blue` `#00639b`, `green` `#006e1c`,
+`teal` `#006a6a`, `orange` `#8e4e00`, `pink` `#984061`, `red` `#b3261e`,
+`blueGrey` `#525e7d`. All of them use `SchemeTonalSpot`.
+
+Preferences live in `localStorage` under `dsh.material-3.enabled` / `.source` /
+`.preset`, so they survive a reload without restarting the harness. If the accent
+colour cannot be read, the theme retries four times and then falls back to the
+Material baseline palette rather than staying unthemed.
 
 ## Repository layout
 
 ```
-plugin/                     the installable bundle (client.js is generated)
-src/parts/palette-spec.js   role order, seed colours, scheme variants
-src/parts/token-map.js      DSH token -> Material 3 role mapping
-src/client/main.js          the Client half source
-src/generated/palettes.js   generated colour tables (12 seeds x 9 variants)
-build/                      generator, bundler, five checks, pixel forensics
-vendor/                     Material Color Utilities + the DSH token sheet
-docs/                       architecture, decisions, roadmap, handoff, verification
+plugin/                   what the profile installs
+  package.json            manifest (dsh.client, dsh.bundle.patch, files)
+  cordis.patch.yml        three-line patch that inserts the plugin
+  index.js                Host half: accent colour reader + /material-3/palette
+  client.js               Client half: the five modules bundled into one file
+  icon.svg, locale/*.json icon and flat message catalogues (26 keys each)
+  lib/palette.js          palette engine, pre-concatenated for the Host
+  lib/mcu/**              vendored Material Color Utilities 0.4.0
+src/                      the actual sources
+  parts/palette-spec.js   role order, eight presets, harmony, bridge roles
+  parts/palette-engine.js seed → 45 roles, packing, WCAG contrast
+  parts/token-map.js      the eleven token tables
+  client/main.js          token map, theme layers, settings page, retry
+  client/stylesheet.js    rules the token registry cannot express
+  generated/palettes.js   build output: 8 schemes × 45 roles
+build/                    seven pipeline steps (generate-palettes, bundle-host,
+                          bundle-client, validate-coverage, validate-manifest,
+                          self-check, host-check), the verify.mjs driver, and
+                          helpers (vendor-mcu, vendor-survey, scan-css,
+                          attribute-colours.py, verify-scrim.py, palette dumps)
+vendor/                   upstream MCU source + product CSS from app.asar
+docs/                     architecture, decisions, handoff, roadmap, evidence
 ```
 
 ## Development
 
-```sh
+```pwsh
 node build/verify.mjs
 ```
 
-Regenerates the palettes, bundles the Client half, then runs every check:
+Seven steps, in order, stopping at the first failure. `all checks passed` at the
+end is the only acceptance signal.
 
-| Check | Guards against |
+| Step | What it proves |
 | --- | --- |
-| `validate-coverage.mjs` | A DSH release renaming or dropping a token the plugin overrides |
-| `validate-manifest.mjs` | A malformed bundle, missing file, unlocalised title, bad icon, or a forbidden `require` |
-| `self-check.mjs` | Runtime regressions — runs `client.js` in a `vm` sandbox with stubbed services, including the disabled path |
+| `generate palettes` | 8 presets × 45 roles, all contrast pairs above threshold |
+| `bundle host` | MCU vendored (13 entries) and `lib/palette.js` written |
+| `bundle client` | the 5 modules parse as one bundle |
+| `token coverage` | 155 product tokens covered, 0 missing, 0 invented |
+| `manifest` | 6 declared files resolve, en/zh aligned, no harness client requires |
+| `behaviour` | four scenarios, 114 assertions |
+| `host route` | exact route, origin bound, cache reuse, dispose |
 
-Palettes are pre-computed at build time, so the shipped bundle has **no runtime
-dependencies** beyond React: no colour library, no Harness Client package.
-
-To reinstall after a change:
-
-```sh
-node build/verify.mjs
-# then: plugin_manager action=install_bundle target=<abs path>/plugin
-```
+`plugin/` is build output: never edit `plugin/client.js` or `plugin/lib/**` by
+hand — the next `verify` run overwrites them.
 
 ## Verification status
 
-Colour, install and registration are proven — including pixel forensics against
-a live screenshot showing 49.6% of the screen matching exact Material 3 role
-values while the stock DSH greys drop to 0.13%.
+Measured on the live light-mode window: **83.5 %** of pixels are exactly a
+Material 3 role colour, **0.29 %** are leftover stock harness colours, and no
+unattributed colour patch exceeds 1 %. Border-token pixels and soft-shadow pixels
+are both zero. Evidence and the colour tables are in `docs/VERIFICATION.md`.
 
-Dark-mode appearance and the interactive settings controls were **not** visually
-verified, because this session could not drive the DSH window. See
-[`docs/VERIFICATION.md`](docs/VERIFICATION.md) for the evidence and the exact
-remaining steps.
+Not verified, because desktop input to the harness window is refused in this
+environment: dark-mode appearance, live hover/pressed pixels, the settings page's
+final look, and menus/dialogs/toasts after elevation goes to `none`. The known
+deviations (switch size, native checkboxes, button radii, tab indicator, font
+stack, two SVG ring tracks, hairline separators) are listed in `docs/HANDOFF.md`.
 
 ## Licence
 
-MIT for this plugin. Vendored Material Color Utilities is Apache-2.0; the
-inherited Material 3 design guidance is under `docs/research/material-3/LICENSE`.
+MIT for this plugin. `plugin/lib/mcu/**` and `vendor/material-color-utilities/**`
+are Apache-2.0 (Material Color Utilities). The research notes under
+`docs/research/material-3/` carry their own upstream licence.

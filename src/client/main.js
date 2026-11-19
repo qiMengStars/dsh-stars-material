@@ -56,6 +56,9 @@ const HOST_PALETTE_ROUTE = '/material-3/palette';
 /** A Host round trip that has not answered by now is not worth waiting for. */
 const HOST_TIMEOUT_MS = 1500;
 
+/** Retry schedule for the accent-colour question, in milliseconds. */
+const HOST_RETRY_MS = [0, 2000, 6000, 15000];
+
 const ROLE_INDEX = new Map(ROLES.map((role, index) => [role, index]));
 const PRESET_INDEX = new Map(PRESETS.map((preset) => [preset.id, preset]));
 
@@ -303,7 +306,8 @@ const SETTINGS_STYLE = `
   gap: 8px;
   display: inline-flex;
   border: 0;
-  border-radius: var(--dsw-radius-xl);
+  /* Material 3 chips are 8dp rounded rectangles, not capsules. */
+  border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
   font: inherit;
@@ -654,26 +658,60 @@ function applyClient(ctx) {
     publish();
   };
 
-  /** Resolve the palette for `preference.source`, then install it. */
-  const resolve = async () => {
-    if (preference.source === SOURCE_PRESET) {
-      resolved = presetPalette(preference.preset);
-      install();
-      return;
-    }
+  /** Handle of the pending accent-colour retry, so a retune can cancel it. */
+  let retryTimer = null;
 
+  const cancelRetry = () => {
+    if (retryTimer !== null) {
+      window.clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+  };
+
+  /**
+   * Ask the Host for the accent palette, retrying a few times.
+   *
+   * The Host route is registered while the Host half loads, and a page can be
+   * ready before that happens — a slow first boot, or a reload that runs the
+   * new Client against the previous Host generation. One failed attempt must not
+   * pin the theme to the baseline palette for the rest of the session, so the
+   * question is repeated on a short backoff before the fallback is accepted as
+   * final.
+   */
+  const resolveSystem = async (attempt) => {
+    retryTimer = null;
     try {
       const answer = await fetchSystemPalette();
       resolved = answer.palette;
       published.systemSeed = answer.seed;
+      install();
+      return;
     } catch (error) {
+      const next = attempt + 1;
+      if (next < HOST_RETRY_MS.length) {
+        retryTimer = window.setTimeout(() => {
+          void resolveSystem(next);
+        }, HOST_RETRY_MS[next]);
+        return;
+      }
       // Falling back keeps the theme usable: the Material baseline palette is
       // still a correct Material 3 palette, just not the user's own colour.
       console.warn('Material 3 theme: system accent colour unavailable, using baseline', error);
       resolved = presetPalette(DEFAULT_PRESET);
       published.systemSeed = null;
+      install();
     }
-    install();
+  };
+
+  /** Resolve the palette for `preference.source`, then install it. */
+  const resolve = async () => {
+    cancelRetry();
+    if (preference.source === SOURCE_PRESET) {
+      resolved = presetPalette(preference.preset);
+      install();
+      return;
+    }
+    await resolveSystem(0);
   };
 
   const retune = (next) => {
@@ -732,10 +770,11 @@ function applyClient(ctx) {
     return () => window.removeEventListener('storage', onStorage);
   }, NS + ' storage');
 
+  ctx.effect(() => () => cancelRetry(), NS + ' palette retry');
+
   // Automatic mode is the default, so the first resolution runs on load.
   void resolve();
 }
-
 const DICTS = {
   en: {
     'nav.title': 'Material 3',

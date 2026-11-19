@@ -62,6 +62,28 @@ const MIN_CONTRAST = {
   onSurfaceVariant: 3,
 };
 
+/**
+ * Text that has to stay legible on every container tone.
+ *
+ * `label-tertiary` is the most-used secondary ink in the product and it lands
+ * on cards, menus and the selected-row fill, not only on the page. Material 3
+ * asks for 4.5:1 there, so each generated palette is checked against all of
+ * them rather than against `surface` alone.
+ */
+const TEXT_CONTRAST_PAIRS = [
+  ['onSurfaceVariant', 'surface'],
+  ['onSurfaceVariant', 'surfaceContainerLow'],
+  ['onSurfaceVariant', 'surfaceContainer'],
+  ['onSurfaceVariant', 'surfaceContainerHigh'],
+  ['onSurfaceVariant', 'surfaceContainerHighest'],
+  ['onSurfaceVariant', 'secondaryContainer'],
+  ['onSurface', 'surfaceContainerHighest'],
+  ['onSecondaryContainer', 'secondaryContainer'],
+];
+
+/** Body text floor, used by every pair above. */
+const MIN_TEXT_CONTRAST = 4.5;
+
 const ALL_ROLES = [...ROLE_ORDER, 'surfaceTint', ...FIXED_ROLE_ORDER];
 
 function assertContrast(presetId, schemeName, packed) {
@@ -75,6 +97,18 @@ function assertContrast(presetId, schemeName, packed) {
       throw new Error(
         `preset "${presetId}" ${schemeName}: ${foreground} on ${background} is ` +
           `${ratio.toFixed(2)}:1, below ${floor}:1`,
+      );
+    }
+  }
+  for (const [foreground, background] of TEXT_CONTRAST_PAIRS) {
+    const ratio = engine.contrastRatio(
+      engine.unpack(packed, foreground),
+      engine.unpack(packed, background),
+    );
+    if (ratio < MIN_TEXT_CONTRAST) {
+      throw new Error(
+        `preset "${presetId}" ${schemeName}: text ${foreground} on ${background} is ` +
+          `${ratio.toFixed(2)}:1, below ${MIN_TEXT_CONTRAST}:1`,
       );
     }
   }

@@ -135,6 +135,11 @@ const BRIDGE_ROLES = [
   { variable: '--dsh-m3-primary', role: 'primary' },
   { variable: '--dsh-m3-on-primary', role: 'onPrimary' },
   { variable: '--dsh-m3-primary-container', role: 'primaryContainer' },
+  // The selected-row fill and the filled tonal button both need the second
+  // container tone; without these two the sheet could only borrow `primary`,
+  // which is the wrong role for a container.
+  { variable: '--dsh-m3-secondary-container', role: 'secondaryContainer' },
+  { variable: '--dsh-m3-on-secondary-container', role: 'onSecondaryContainer' },
   { variable: '--dsh-m3-error', role: 'error' },
   { variable: '--dsh-m3-on-error', role: 'onError' },
   { variable: '--dsh-m3-success', role: 'success' },

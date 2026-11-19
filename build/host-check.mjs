@@ -98,7 +98,81 @@ assert.equal(again.state.body, sameOrigin.state.body, 'the answer must be cached
 for (const dispose of effects) dispose();
 assert.equal(disposed, 1, 'disposing the effect must remove the route');
 
+// ---------------------------------------------------------------------------
+// A bound listener: `getOrigin()` answers, so the exact-host comparison runs.
+// ---------------------------------------------------------------------------
+
+const boundEffects = [];
+let boundRoute = null;
+apply({
+  effect(fn, _label) {
+    const dispose = fn();
+    boundEffects.push(dispose);
+    return dispose;
+  },
+  webServer: {
+    getOrigin: () => 'http://127.0.0.1:12345',
+    register(route) {
+      boundRoute = route;
+      return () => {};
+    },
+  },
+});
+
+async function statusOf(headers) {
+  const exchange = (() => {
+    const state = { statusCode: 0, body: '' };
+    return {
+      request: { headers, method: 'GET', url: '/material-3/palette' },
+      response: {
+        set statusCode(value) {
+          state.statusCode = value;
+        },
+        setHeader() {},
+        end(body) {
+          state.body = body ?? '';
+        },
+      },
+      state,
+    };
+  })();
+  await boundRoute.handler(exchange.request, exchange.response);
+  return exchange.state.statusCode;
+}
+
+assert.equal(await statusOf({ host: '127.0.0.1:12345' }), 200, 'a request from the harness itself must be served');
+assert.equal(
+  await statusOf({ host: '127.0.0.1:12345', origin: 'http://127.0.0.1:12345' }),
+  200,
+  'the harness origin must be accepted',
+);
+assert.equal(
+  await statusOf({ host: 'localhost:49678', origin: 'http://localhost:49678' }),
+  200,
+  'the localhost form of the same listener must be accepted',
+);
+// The DNS-rebinding hole: another site reaches the loopback listener with a
+// matching Host, so its Origin is the only thing that gives it away.
+assert.equal(
+  await statusOf({ host: '127.0.0.1:12345', origin: 'http://evil.example' }),
+  403,
+  'a foreign Origin must be refused even when Host matches',
+);
+assert.equal(
+  await statusOf({ host: '127.0.0.1:12345', origin: 'http://127.0.0.1:9999' }),
+  403,
+  'another port on loopback is a different sender',
+);
+assert.equal(
+  await statusOf({ host: 'attacker.example:49678' }),
+  403,
+  'a mismatched Host must be refused',
+);
+
+for (const dispose of boundEffects) dispose();
+
 console.log(`host route        ${registered.kind} ${registered.path}`);
 console.log(`origin fallback   getOrigin() throwing is survivable`);
+console.log(`origin bound      foreign Origin refused, loopback accepted`);
 console.log(`payload           ${payload.ok ? `seed ${payload.seed}` : `declined: ${payload.reason}`}`);
 console.log('host-check OK');

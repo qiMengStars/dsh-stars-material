@@ -8,8 +8,8 @@
  *
  *   1. **Paint that was a border colour.** Several dividers, the progress track
  *      and the table separators painted themselves with `--dsw-alias-border-l1`
- *      / `l2` / `l4`. Those tokens are transparent now, so the handful of cases
- *      with a stable selector are redrawn with the surface ramp instead.
+ *      / `l2` / `l3` / `l4`. Those tokens are transparent now, so the handful of
+ *      cases with a stable selector are redrawn with the surface ramp instead.
  *   2. **Declarations that must disappear.** Material 3 does not draw a stroke
  *      around a text field or an error badge, so the border declarations are
  *      zeroed. Only `border*` is touched — never `outline`, which belongs to
@@ -74,11 +74,11 @@ progress::-webkit-progress-bar {
   border-radius: 999px;
 }
 
-/* The switch track is already visible: it reads --dsw-alias-border-l3, which
- * this theme keeps. It only needs the Material 3 off-state tone and an
- * on-state that stays legible in both palettes. */
+/* The switch track painted itself with the border-l3 token, which is transparent
+ * in this theme, so the track is redrawn from the outline-variant tone: visible
+ * enough to read as a track, quiet enough to stay a control rather than a rule. */
 [role="switch"][aria-checked="false"] {
-  background: var(--dsh-m3-surface-container-highest);
+  background: var(--dsh-m3-outline-variant);
 }
 
 [role="switch"][aria-checked="true"] {
@@ -88,6 +88,19 @@ progress::-webkit-progress-bar {
 /* Table rows that used to be separated by a 1dp hairline. */
 tr[data-turn-start="true"]:not(:first-child) > td {
   box-shadow: inset 0 1px 0 var(--dsh-m3-outline-variant);
+}
+
+/* ---------------------------------------------------------------------------
+ * 1b. Selected rows carry a container tone
+ * ------------------------------------------------------------------------- */
+
+/* The product paints a selected session row with the same token it uses for a
+ * hovered one, so the two states are indistinguishable and hovering looks
+ * stronger than being selected (an 8% state layer over the column tone is
+ * darker than the row's resting fill). Material 3 separates them by role:
+ * hover is a state layer on the surface, selection is a container tone. */
+[role="treeitem"][aria-selected="true"] {
+  background-color: var(--dsh-m3-secondary-container);
 }
 
 /* ---------------------------------------------------------------------------
