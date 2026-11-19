@@ -24,7 +24,7 @@ import { createPaletteEngine, mcu } from './lib/palette.js';
 /** Hard dependency: without a web server there is nothing to answer the Client. */
 export const inject = ['webServer'];
 
-const ROUTE = '/material-3/palette';
+const ROUTE = '/stars-material/palette';
 
 /** Accent colours are user settings; re-reading them every keystroke is waste. */
 const CACHE_MS = 30_000;

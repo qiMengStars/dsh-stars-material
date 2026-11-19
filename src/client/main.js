@@ -15,7 +15,7 @@
  *           stack per token over whatever theme is active, so this keeps working
  *           on top of the built-in palettes and of third-party themes without
  *           fighting them for the preference.
- *        b. `theme.register()` for `material-3-light` / `material-3-dark` — so
+ *        b. `theme.register()` for `stars-material-light` / `stars-material-dark` — so
  *           the theme is visible to `getTheme().themes` and selectable through
  *           `setTheme` like any other registered theme.
  *        c. `--dsh-m3-*` bridge properties on `:root`, so the stylesheet can
@@ -30,13 +30,13 @@
  * with the `--dsw-alias-*` tokens the host already publishes.
  */
 
-const NS = 'dsh-material-3';
-const SOURCE = 'dsh-material-3';
+const NS = 'dsh-stars-material';
+const SOURCE = 'dsh-stars-material';
 
-const LIGHT_THEME_ID = 'material-3-light';
-const DARK_THEME_ID = 'material-3-dark';
+const LIGHT_THEME_ID = 'stars-material-light';
+const DARK_THEME_ID = 'stars-material-dark';
 
-const STORAGE_PREFIX = 'dsh.material-3.';
+const STORAGE_PREFIX = 'dsh.stars-material.';
 const STORAGE_ENABLED = STORAGE_PREFIX + 'enabled';
 const STORAGE_SOURCE = STORAGE_PREFIX + 'source';
 const STORAGE_PRESET = STORAGE_PREFIX + 'preset';
@@ -45,13 +45,13 @@ const STORAGE_PRESET = STORAGE_PREFIX + 'preset';
 const SOURCE_SYSTEM = 'system';
 const SOURCE_PRESET = 'preset';
 
-const SETTINGS_SECTION_ID = 'material-3';
+const SETTINGS_SECTION_ID = 'stars-material';
 const SETTINGS_SECTION_ORDER = 26;
 
-const STYLE_TAG_ID = NS + '/material-3.css';
+const STYLE_TAG_ID = NS + '/stars-material.css';
 
 /** Host route that answers with the OS accent colour and its palette. */
-const HOST_PALETTE_ROUTE = '/material-3/palette';
+const HOST_PALETTE_ROUTE = '/stars-material/palette';
 
 /** A Host round trip that has not answered by now is not worth waiting for. */
 const HOST_TIMEOUT_MS = 1500;
@@ -433,7 +433,7 @@ function Material3SettingsPage(props) {
 
   return h(
     'div',
-    { className: NS + '-page', 'data-dsh-material-3-settings': '' },
+    { className: NS + '-page', 'data-dsh-stars-material-settings': '' },
     h('h2', { className: NS + '-title' }, t('page.title')),
     h('p', { className: NS + '-lede' }, t('page.description')),
 

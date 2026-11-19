@@ -40,7 +40,7 @@ const MODULES = [
   'src/client/main.js',
 ];
 
-const PACKAGE_ID = 'dsh-material-3';
+const PACKAGE_ID = 'dsh-stars-material';
 
 const IMPORT_LINE = /^\s*import\s[\s\S]*?;\s*$/u;
 const EXPORT_DECL = /^export\s+(?=(?:const|let|var|function|class|async)\b)/u;

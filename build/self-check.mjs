@@ -330,15 +330,15 @@ for (const name of SHIPPED_CSS) {
 // ---------------------------------------------------------------------------
 
 const preset = await scenario({
-  storage: { 'dsh.material-3.source': 'preset', 'dsh.material-3.preset': 'baseline' },
+  storage: { 'dsh.stars-material.source': 'preset', 'dsh.stars-material.preset': 'baseline' },
 });
 
 check(preset.theme.calls.overrides.length === 2, `expected two override layers, got ${preset.theme.calls.overrides.length}`);
 
 const override = preset.theme.calls.overrides[0];
-check(override?.source === 'dsh-material-3', `override source is "${override?.source}"`);
+check(override?.source === 'dsh-stars-material', `override source is "${override?.source}"`);
 const bridge = preset.theme.calls.overrides[1];
-check(bridge?.source === 'dsh-material-3/bridge', `bridge source is "${bridge?.source}"`);
+check(bridge?.source === 'dsh-stars-material/bridge', `bridge source is "${bridge?.source}"`);
 
 const tokens = override?.tokens ?? {};
 const productNames = Object.keys(tokens).sort();
@@ -485,7 +485,7 @@ for (const name of bridgeNames) {
 // Registered themes.
 const ids = preset.theme.calls.registered.map((entry) => `${entry.id}:${entry.colorScheme}`).sort();
 check(
-  ids.join(',') === 'material-3-dark:dark,material-3-light:light',
+  ids.join(',') === 'stars-material-dark:dark,stars-material-light:light',
   `registered themes are [${ids.join(', ')}]`,
 );
 for (const entry of preset.theme.calls.registered) {
@@ -513,8 +513,8 @@ if (en && zh) {
 // The settings page is contributed to `settings.section` under its own id.
 check(preset.slots.__registrations.length === 1, `expected one settings section, got ${preset.slots.__registrations.length}`);
 check(
-  preset.slots.__registrations[0]?.options?.id === 'material-3',
-  'the settings section id is not "material-3"',
+  preset.slots.__registrations[0]?.options?.id === 'stars-material',
+  'the settings section id is not "stars-material"',
 );
 check(
   preset.slots.__registrations[0]?.options?.order === 26,
@@ -547,7 +547,7 @@ const ANSWER = {
 };
 
 const system = await scenario({
-  storage: { 'dsh.material-3.source': 'system' },
+  storage: { 'dsh.stars-material.source': 'system' },
   fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve(ANSWER) }),
 });
 
@@ -572,7 +572,7 @@ check(dom.tags.length === 0, 'the system-mode stylesheet outlived the plugin');
 // ---------------------------------------------------------------------------
 
 const fallback = await scenario({
-  storage: { 'dsh.material-3.source': 'system' },
+  storage: { 'dsh.stars-material.source': 'system' },
   fetch: () => Promise.reject(new Error('ECONNREFUSED')),
 });
 
@@ -596,7 +596,7 @@ check(dom.tags.length === 0, 'the fallback stylesheet outlived the plugin');
 // A first attempt that fails must not be final: the next retry upgrades the
 // layers instead of leaving the baseline palette in place for the session.
 const recovered = await scenario({
-  storage: { 'dsh.material-3.source': 'system' },
+  storage: { 'dsh.stars-material.source': 'system' },
   fetch: (() => {
     let calls = 0;
     return () => {
@@ -625,7 +625,7 @@ recovered.disposeAll();
 // ---------------------------------------------------------------------------
 
 const off = await scenario({
-  storage: { 'dsh.material-3.enabled': '0', 'dsh.material-3.source': 'preset' },
+  storage: { 'dsh.stars-material.enabled': '0', 'dsh.stars-material.source': 'preset' },
 });
 
 check(off.theme.calls.overrides.length === 0, 'a disabled theme still installed an override layer');

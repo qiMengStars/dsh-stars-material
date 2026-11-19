@@ -1,4 +1,4 @@
-# Material 3 theme for the DeepSeek Harness
+# dsh-stars-material — a Material 3 theme for the DeepSeek Harness
 
 A Material You (Material 3) UI theme for the DeepSeek Harness. It is not a colour
 swap: the theme repaints the harness with Material 3 roles, replaces borders with
@@ -36,7 +36,7 @@ The eight presets are `baseline` `#6750a4`, `blue` `#00639b`, `green` `#006e1c`,
 `teal` `#006a6a`, `orange` `#8e4e00`, `pink` `#984061`, `red` `#b3261e`,
 `blueGrey` `#525e7d`. All of them use `SchemeTonalSpot`.
 
-Preferences live in `localStorage` under `dsh.material-3.enabled` / `.source` /
+Preferences live in `localStorage` under `dsh.stars-material.enabled` / `.source` /
 `.preset`, so they survive a reload without restarting the harness. If the accent
 colour cannot be read, the theme retries four times and then falls back to the
 Material baseline palette rather than staying unthemed.
@@ -47,7 +47,7 @@ Material baseline palette rather than staying unthemed.
 plugin/                   what the profile installs
   package.json            manifest (dsh.client, dsh.bundle.patch, files)
   cordis.patch.yml        three-line patch that inserts the plugin
-  index.js                Host half: accent colour reader + /material-3/palette
+  index.js                Host half: accent colour reader + /stars-material/palette
   client.js               Client half: the five modules bundled into one file
   icon.svg, locale/*.json icon and flat message catalogues (26 keys each)
   lib/palette.js          palette engine, pre-concatenated for the Host

@@ -38,12 +38,12 @@ const ctx = {
 apply(ctx);
 assert.ok(registered !== null, 'apply must register one route');
 assert.equal(registered.kind, 'exact');
-assert.equal(registered.path, '/material-3/palette');
+assert.equal(registered.path, '/stars-material/palette');
 
 /** Minimal stand-in for the node request/response pair. */
 function exchange(headers) {
   const state = { statusCode: 0, headers: {}, body: '' };
-  const request = { headers, method: 'GET', url: '/material-3/palette' };
+  const request = { headers, method: 'GET', url: '/stars-material/palette' };
   const response = {
     get statusCode() {
       return state.statusCode;
@@ -123,7 +123,7 @@ async function statusOf(headers) {
   const exchange = (() => {
     const state = { statusCode: 0, body: '' };
     return {
-      request: { headers, method: 'GET', url: '/material-3/palette' },
+      request: { headers, method: 'GET', url: '/stars-material/palette' },
       response: {
         set statusCode(value) {
           state.statusCode = value;
