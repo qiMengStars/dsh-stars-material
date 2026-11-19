@@ -4,6 +4,11 @@
  *
  *   node build/validate-coverage.mjs
  *
+ * The reference sheet is `vendor/dsh-survey/design-platform.css`, extracted from
+ * the shipped app.asar (see docs/research/dsh-theme-architecture.md for the
+ * extraction recipe). It is vendored so this check keeps working with `.tmp/`
+ * deleted, which is where the extraction originally landed.
+ *
  * Exits non-zero when either side is out of sync, so CI-style checks catch a
  * token rename in a future DSH release.
  */
@@ -24,7 +29,7 @@ import {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
-const CSS_FILE = resolve(REPO, '.tmp/design-platform.css');
+const CSS_FILE = resolve(REPO, 'vendor/dsh-survey/design-platform.css');
 
 const css = await readFile(CSS_FILE, 'utf8');
 

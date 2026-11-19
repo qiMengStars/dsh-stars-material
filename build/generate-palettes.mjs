@@ -1,17 +1,21 @@
 /**
  * Build-time palette generator.
  *
- * Reads the Material Color Utilities checkout under `.tmp/mcu-fixed` and emits
- * `src/generated/palettes.js`: a plain JavaScript module holding every palette
- * this plugin can show, so the shipped Client bundle needs no color library at
- * runtime.
+ * Reads the vendored Material Color Utilities checkout under
+ * `vendor/material-color-utilities` and emits `src/generated/palettes.js`: a
+ * plain JavaScript module holding every palette this plugin can show, so the
+ * shipped Client bundle needs no color library at runtime.
  *
  *   node build/generate-palettes.mjs
  *
- * The output shape is deliberately compact — role values are stored as an
- * ordered array of `#rrggbb` strings whose indices follow ROLE_ORDER, because a
- * full 12 seeds x 9 variants x 2 schemes matrix would otherwise be several
- * hundred kilobytes of repeated key names.
+ * The output shape is deliberately compact — role values are stored as one
+ * hex-digit string per palette (45 roles x 6 digits, ROLES order, `#` dropped)
+ * because a full 12 seeds x 9 variants x 2 schemes matrix would otherwise be
+ * several hundred kilobytes of repeated key names.
+ *
+ * The vendored copy is Material Color Utilities v0.4.0 with `.js` added to its
+ * extensionless relative imports; see vendor/material-color-utilities/README.md
+ * and build/vendor-mcu.mjs.
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -27,7 +31,7 @@ import {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
-const MCU_ENTRY = resolve(REPO, '.tmp/mcu-fixed/index.js');
+const MCU_ENTRY = resolve(REPO, 'vendor/material-color-utilities/index.js');
 const OUT_DIR = resolve(REPO, 'src/generated');
 const OUT_FILE = resolve(OUT_DIR, 'palettes.js');
 
