@@ -41,6 +41,15 @@ const STORAGE_ENABLED = STORAGE_PREFIX + 'enabled';
 const STORAGE_SOURCE = STORAGE_PREFIX + 'source';
 const STORAGE_PRESET = STORAGE_PREFIX + 'preset';
 
+/**
+ * Keys this plugin wrote before it was renamed to `dsh-stars-material`.
+ *
+ * They are only ever read, never written again: a profile that already had a
+ * preference keeps it across the rename, and the first change copies the value
+ * to the new key. Without this a rename silently resets everyone's settings.
+ */
+const LEGACY_PREFIX = 'dsh.material-3.';
+
 /** `system` follows the OS accent colour; `preset` pins one Material 3 seed. */
 const SOURCE_SYSTEM = 'system';
 const SOURCE_PRESET = 'preset';
@@ -226,6 +235,19 @@ function readStorage(key, fallback) {
   }
 }
 
+/**
+ * Read one preference, falling back to the pre-rename key.
+ *
+ * @param {string} key   current key
+ * @param {string} legacy equivalent key under the old prefix
+ * @param {string} fallback value used when neither key is set
+ */
+function readPreference(key, legacy, fallback) {
+  const current = readStorage(key, null);
+  if (current !== null) return current;
+  return readStorage(legacy, fallback);
+}
+
 function writeStorage(key, value) {
   try {
     window.localStorage.setItem(key, value);
@@ -236,9 +258,11 @@ function writeStorage(key, value) {
 
 function readPreferences() {
   return {
-    enabled: readStorage(STORAGE_ENABLED, '1') !== '0',
-    source: clampSource(readStorage(STORAGE_SOURCE, SOURCE_SYSTEM)),
-    preset: clampPreset(readStorage(STORAGE_PRESET, DEFAULT_PRESET)),
+    enabled: readPreference(STORAGE_ENABLED, LEGACY_PREFIX + 'enabled', '1') !== '0',
+    source: clampSource(
+      readPreference(STORAGE_SOURCE, LEGACY_PREFIX + 'source', SOURCE_SYSTEM),
+    ),
+    preset: clampPreset(readPreference(STORAGE_PRESET, LEGACY_PREFIX + 'preset', DEFAULT_PRESET)),
   };
 }
 

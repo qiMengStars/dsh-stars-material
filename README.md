@@ -84,7 +84,7 @@ end is the only acceptance signal.
 | `bundle client` | the 5 modules parse as one bundle |
 | `token coverage` | 155 product tokens covered, 0 missing, 0 invented |
 | `manifest` | 6 declared files resolve, en/zh aligned, no harness client requires |
-| `behaviour` | four scenarios, 114 assertions |
+| `behaviour` | six scenarios, 118 assertions |
 | `host route` | exact route, origin bound, cache reuse, dispose |
 
 `plugin/` is build output: never edit `plugin/client.js` or `plugin/lib/**` by

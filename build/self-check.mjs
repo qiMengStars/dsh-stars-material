@@ -637,6 +637,48 @@ check(offSheet.includes('-page'), 'the settings stylesheet disappeared while dis
 off.disposeAll();
 check(dom.tags.length === 0, 'the disabled stylesheet outlived the plugin');
 
+// ---------------------------------------------------------------------------
+// Scenario 5: a profile that still holds pre-rename keys
+// ---------------------------------------------------------------------------
+
+// The plugin used to be called dsh-material-3 and wrote dsh.material-3.*. A
+// rename must not silently reset the preference, so the old keys are read once.
+const legacy = await scenario({
+  storage: { 'dsh.material-3.enabled': '0', 'dsh.material-3.source': 'preset' },
+});
+check(
+  legacy.theme.calls.overrides.length === 0,
+  'a legacy "enabled: 0" was ignored, so the rename reset the user preference',
+);
+const legacyState = legacy.slots.__registrations[0]?.options?.inject?.()?.state;
+check(
+  legacyState?.enabled === false,
+  `legacy preference not carried over: enabled is "${legacyState?.enabled}"`,
+);
+const legacyPreset = await scenario({
+  storage: { 'dsh.material-3.source': 'preset', 'dsh.material-3.preset': 'teal' },
+});
+check(
+  legacyPreset.theme.calls.overrides.at(-2)?.tokens?.['--dsw-alias-bg-base'] !== undefined,
+  'legacy preset mode did not install a palette',
+);
+legacy.disposeAll();
+legacyPreset.disposeAll();
+
+// The current key must win over the legacy one once it exists.
+const bothKeys = await scenario({
+  storage: { 'dsh.stars-material.enabled': '1', 'dsh.material-3.enabled': '0' },
+});
+check(
+  bothKeys.theme.calls.overrides.length === 2,
+  'the current key did not take precedence over the legacy key',
+);
+bothKeys.disposeAll();
+
+// ---------------------------------------------------------------------------
+// Report
+// ---------------------------------------------------------------------------
+
 report();
 
 function report() {
@@ -651,6 +693,6 @@ function report() {
   process.stdout.write(`bridge        ${bridgeNames.length} --dsh-m3-* properties\n`);
   process.stdout.write(`themes        ${ids.join(', ')}\n`);
   process.stdout.write(`locales       en + zh, ${Object.keys(en ?? {}).length} keys aligned\n`);
-  process.stdout.write(`scenarios     preset, system, fallback, disabled (${assertions} assertions)\n`);
+  process.stdout.write(`scenarios     preset, system, fallback, recovered, disabled, legacy (${assertions} assertions)\n`);
   process.stdout.write('self-check OK\n');
 }
