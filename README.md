@@ -35,6 +35,25 @@ src/                      插件源码
 build/                    构建与校验脚本
 vendor/                   上游依赖源码及宿主原始样式参考
 ```
+## 安装
+```powershell
+git clone  https://github.com/qiMengStars/dsh-stars-material
+Cloning into 'dsh-stars-material'...
+remote: Enumerating objects: 219, done.
+remote: Counting objects: 100% (219/219), done.
+remote: Compressing objects: 100% (122/122), done.
+remote: Total 219 (delta 88), reused 219 (delta 88), pack-reused 0 (from 0)
+Receiving objects: 100% (219/219), 195.30 KiB | 47.00 KiB/s, done.
+Resolving deltas: 100% (88/88), done.
+cd dsh-stars-material/plugin
+pwd
+
+Path
+----
+<你的目录>\dsh-stars-material\plugin
+```
+<img src="image.png" width="300" />
+
 
 ## 开发与构建
 
