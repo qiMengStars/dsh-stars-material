@@ -40,4 +40,4 @@ plugin never loads any of this — it only slices pre-computed hex strings.
 
 Material Color Utilities is licensed under the Apache License 2.0. The original
 license text is preserved verbatim in [`LICENSE`](LICENSE). This repository's
-own code is MIT (see the root `README.md`).
+own code is MIT (see the root [`LICENSE`](../../LICENSE)).

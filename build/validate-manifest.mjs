@@ -12,7 +12,8 @@
  *   - both locale files parse, carry `meta.title` / `meta.description` in
  *     sentence case, and expose the same key set;
  *   - the icon is a well-formed SVG with a `viewBox`, well under the size cap;
- *   - the Client bundle only `require`s modules from the allowed list.
+ *   - the Client bundle only `require`s modules from the allowed list;
+ *   - every licence the project claims or relies on has its text on disk.
  *
  *   node build/validate-manifest.mjs
  */
@@ -97,6 +98,37 @@ for (const target of targets) {
 
 for (const required of ['index.js', 'client.js', 'cordis.patch.yml', 'icon.svg', 'locale/en.json', 'locale/zh.json']) {
   check(await exists(resolve(PKG_DIR, required)), `package is missing ${required}`);
+}
+
+// ---------------------------------------------------------------------------
+// Licences
+// ---------------------------------------------------------------------------
+
+// `package.json` claims MIT and the vendor directory redistributes MIT code, so
+// both claims have to be backed by the licence text actually travelling with
+// the files. The bundle keeps its own copy because it is installed on its own,
+// without the repository around it.
+check(pkg.license === 'MIT', `package.json: expected "license": "MIT", found ${JSON.stringify(pkg.license)}`);
+check(
+  (pkg.files ?? []).some((entry) => entry.replace(/^\.\//, '') === 'LICENSE'),
+  'package.json: "LICENSE" must be listed in "files" so it ships with the bundle',
+);
+
+const LICENCES = [
+  ['LICENSE', 'MIT'],
+  ['plugin/LICENSE', 'MIT'],
+  ['vendor/dsh-survey/LICENSE', 'MIT'],
+];
+for (const [path, expected] of LICENCES) {
+  const full = resolve(REPO, path);
+  if (!(await exists(full))) {
+    check(false, `missing licence file: ${path}`);
+    continue;
+  }
+  const text = await readFile(full, 'utf8');
+  const heading = text.split('\n').find((line) => line.trim() !== '') ?? '';
+  check(heading.includes(expected), `${path}: first line "${heading}" does not name the ${expected} licence`);
+  check(/Permission is hereby granted/u.test(text), `${path}: does not contain the ${expected} permission grant`);
 }
 
 // ---------------------------------------------------------------------------

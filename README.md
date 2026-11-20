@@ -17,11 +17,13 @@
 ## 目录结构
 
 ```
+LICENSE                   本项目 MIT 协议全文
 plugin/                   构建后的插件产物
   package.json            插件清单（dsh.client、dsh.bundle.patch、files）
   cordis.patch.yml        插件注入补丁配置
   index.js                Host 端入口：读取系统主题色并提供调色板接口
   client.js               Client 端入口：打包后的主题脚本
+  LICENSE                 随包分发的 MIT 协议全文
   icon.svg, locale/*.json 插件图标与中/英多语言文案
   lib/palette.js          供 Host 端使用的调色板生成引擎
   lib/mcu/**              内置的 Material Color Utilities 0.4.0 依赖
@@ -34,6 +36,9 @@ src/                      插件源码
   generated/palettes.js   内置预设的预计算调色板数据
 build/                    构建与校验脚本
 vendor/                   上游依赖源码及宿主原始样式参考
+  dsh-survey/LICENSE      摘录样式表的 MIT 协议全文
+  material-color-utilities/LICENSE
+                          Material Color Utilities 的 Apache-2.0 协议全文
 ```
 
 ## 开发与构建
@@ -58,5 +63,6 @@ node build/verify.mjs
 
 ## 开源协议
 
-- 本项目代码基于 MIT 协议开源。
-- `plugin/lib/mcu/**` 与 `vendor/material-color-utilities/**` 遵循 Apache-2.0 协议（Material Color Utilities）。
+- 本项目代码基于 MIT 协议开源，协议全文见 [LICENSE](LICENSE)。
+- `plugin/lib/mcu/**` 与 `vendor/material-color-utilities/**` 遵循 Apache-2.0 协议（Material Color Utilities），协议全文随源码一并保留。
+- `vendor/dsh-survey/**` 的四份样式表摘自 DeepSeek Harness，遵循 MIT 协议（Copyright (c) 2026 DeepSeek），协议全文见 [vendor/dsh-survey/LICENSE](vendor/dsh-survey/LICENSE)。

@@ -52,6 +52,38 @@ const TARGETS = [
   },
 ];
 
+/**
+ * The licence the extracted sheets travel under.
+ *
+ * The sheets come from DeepSeek Harness packages, which declare `"license":
+ * "MIT"` and carry this text verbatim in their own `LICENSE` file. Copying
+ * files without it would be a redistribution without the notice MIT requires,
+ * so it is written next to them on every run rather than left to a one-off
+ * manual step.
+ */
+const UPSTREAM_LICENCE = `MIT License
+
+Copyright (c) 2026 DeepSeek
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+`;
+
 async function readAsar(asarPath) {
   const handle = await open(asarPath, 'r');
   const size = (await handle.stat()).size;
@@ -126,7 +158,7 @@ Extracted verbatim from the installed DeepSeek Harness \`app.asar\`. Regenerate
 with:
 
 \`\`\`
-node build/vendor-survey.mjs
+node build/vendor-survey.mjs <path-to-app.asar>
 \`\`\`
 
 | File | Bytes | Why it is here |
@@ -138,9 +170,15 @@ the set of colour tokens the product is guaranteed to read (so nothing may be
 missing); the union of all four supplies the set of names that exist at all (so
 nothing may be invented).
 
+## Licence
+
+These sheets are copied from DeepSeek Harness, whose packages are MIT licensed
+(\`Copyright (c) 2026 DeepSeek\`). The notice they require travels with them in
+[LICENSE](LICENSE), which this script rewrites on every run.
+
 ## When DSH ships a new frontend build
 
-1. \`node build/vendor-survey.mjs\`
+1. \`node build/vendor-survey.mjs <path-to-app.asar>\`
 2. \`node build/validate-coverage.mjs\` — exits non-zero if a token was renamed,
    added or removed.
 3. Update \`src/parts/token-map.js\` for whatever the check reports.
@@ -152,7 +190,9 @@ one of the four sheets above.
 `;
 
 await writeFile(join(OUT_DIR, 'README.md'), readme, 'utf8');
+await writeFile(join(OUT_DIR, 'LICENSE'), UPSTREAM_LICENCE, 'utf8');
 
 console.log(`source ${asarPath}`);
 for (const { name, bytes } of written) console.log(`  ${name}: ${bytes} bytes`);
 console.log(`wrote ${join(OUT_DIR, 'README.md')}`);
+console.log(`wrote ${join(OUT_DIR, 'LICENSE')}`);

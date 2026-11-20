@@ -4,7 +4,7 @@ Extracted verbatim from the installed DeepSeek Harness `app.asar`. Regenerate
 with:
 
 ```
-node build/vendor-survey.mjs
+node build/vendor-survey.mjs <path-to-app.asar>
 ```
 
 | File | Bytes | Why it is here |
@@ -19,9 +19,15 @@ the set of colour tokens the product is guaranteed to read (so nothing may be
 missing); the union of all four supplies the set of names that exist at all (so
 nothing may be invented).
 
+## Licence
+
+These sheets are copied from DeepSeek Harness, whose packages are MIT licensed
+(`Copyright (c) 2026 DeepSeek`). The notice they require travels with them in
+[LICENSE](LICENSE), which this script rewrites on every run.
+
 ## When DSH ships a new frontend build
 
-1. `node build/vendor-survey.mjs`
+1. `node build/vendor-survey.mjs <path-to-app.asar>`
 2. `node build/validate-coverage.mjs` — exits non-zero if a token was renamed,
    added or removed.
 3. Update `src/parts/token-map.js` for whatever the check reports.
