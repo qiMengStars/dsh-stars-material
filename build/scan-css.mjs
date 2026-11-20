@@ -8,7 +8,12 @@
 
 import { readFileSync } from 'node:fs';
 
-const ASAR = '<dsh-install>/resources/app.asar';
+// Point this at the installed Harness bundle on your own machine:
+//   $env:DSH_ASAR = '<install>/resources/app.asar'
+const ASAR = process.env.DSH_ASAR;
+if (!ASAR) {
+  throw new Error('set DSH_ASAR to the installed app.asar before running this helper');
+}
 const buffer = readFileSync(ASAR);
 
 const headerSize = buffer.readUInt32LE(12);

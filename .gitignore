@@ -5,6 +5,11 @@
 .tmp-analysis/
 *.tmp
 
+# Working notes: design records, decision logs, research extracts, handoff
+# material. They document one machine's setup and are of no use to anyone
+# consuming the theme, so they stay on disk but out of the repository.
+docs/
+
 # Editor and OS noise
 .vscode/
 .idea/

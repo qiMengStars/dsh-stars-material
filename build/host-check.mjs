@@ -147,7 +147,7 @@ assert.equal(
   'the harness origin must be accepted',
 );
 assert.equal(
-  await statusOf({ host: 'localhost:49678', origin: 'http://localhost:49678' }),
+  await statusOf({ host: 'localhost:12345', origin: 'http://localhost:12345' }),
   200,
   'the localhost form of the same listener must be accepted',
 );
@@ -164,7 +164,7 @@ assert.equal(
   'another port on loopback is a different sender',
 );
 assert.equal(
-  await statusOf({ host: 'attacker.example:49678' }),
+  await statusOf({ host: 'attacker.example:12345' }),
   403,
   'a mismatched Host must be refused',
 );

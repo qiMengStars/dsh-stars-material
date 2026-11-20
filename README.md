@@ -65,8 +65,12 @@ build/                    seven pipeline steps (generate-palettes, bundle-host,
                           helpers (vendor-mcu, vendor-survey, scan-css,
                           attribute-colours.py, verify-scrim.py, palette dumps)
 vendor/                   upstream MCU source + product CSS from app.asar
-docs/                     architecture, decisions, handoff, roadmap, evidence
 ```
+
+`plugin/`, `src/generated/palettes.js` and `plugin/lib/**` are committed on
+purpose: the harness installs this directory as a `link:` dependency and runs no
+build step of its own, so a clone has to be installable as-is. `node
+build/verify.mjs` regenerates all of them when the sources change.
 
 ## Development
 
@@ -87,24 +91,24 @@ end is the only acceptance signal.
 | `behaviour` | six scenarios, 118 assertions |
 | `host route` | exact route, origin bound, cache reuse, dispose |
 
-`plugin/` is build output: never edit `plugin/client.js` or `plugin/lib/**` by
-hand — the next `verify` run overwrites them.
+`plugin/` is generated: never edit `plugin/client.js` or `plugin/lib/**` by hand
+— the next `verify` run overwrites them.
 
 ## Verification status
 
 Measured on the live light-mode window: **83.5 %** of pixels are exactly a
 Material 3 role colour, **0.29 %** are leftover stock harness colours, and no
 unattributed colour patch exceeds 1 %. Border-token pixels and soft-shadow pixels
-are both zero. Evidence and the colour tables are in `docs/VERIFICATION.md`.
+are both zero.
 
-Not verified, because desktop input to the harness window is refused in this
-environment: dark-mode appearance, live hover/pressed pixels, the settings page's
-final look, and menus/dialogs/toasts after elevation goes to `none`. The known
-deviations (switch size, native checkboxes, button radii, tab indicator, font
-stack, two SVG ring tracks, hairline separators) are listed in `docs/HANDOFF.md`.
+Not verified, because desktop input to the harness window is refused in the
+environment this was built in: dark-mode appearance, live hover/pressed pixels, the
+settings page's final look, and menus/dialogs/toasts after elevation goes to
+`none`. The known deviations are switch size, native checkboxes, button radii, the
+tab indicator, the font stack, two SVG ring tracks, and the hairline separators
+that disappear with the border tokens.
 
 ## Licence
 
 MIT for this plugin. `plugin/lib/mcu/**` and `vendor/material-color-utilities/**`
-are Apache-2.0 (Material Color Utilities). The research notes under
-`docs/research/material-3/` carry their own upstream licence.
+are Apache-2.0 (Material Color Utilities).

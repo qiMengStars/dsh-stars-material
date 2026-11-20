@@ -1,12 +1,13 @@
 /**
  * Re-extract the vendored DSH token sheets from the installed app.asar.
  *
- *   node build/vendor-survey.mjs [path-to-app.asar]
+ *   node build/vendor-survey.mjs <path-to-app.asar>
  *
- * Default source is the installed DeepSeek Harness build. The extracted files
- * land in `vendor/dsh-survey/` and are read by `build/validate-coverage.mjs`, so
- * the coverage gate keeps working without a shell that can read inside the
- * archive.
+ * The source is your installed DeepSeek Harness build, so it has to be named on
+ * the command line (or in `DSH_ASAR`); there is no default that would work on
+ * another machine. The extracted files land in `vendor/dsh-survey/` and are read
+ * by `build/validate-coverage.mjs`, so the coverage gate keeps working without a
+ * shell that can read inside the archive.
  *
  * ASAR layout (pickled header): `headerSize` is a little-endian uint32 at byte
  * 12, the JSON directory starts at byte 16, and the payload starts at
@@ -22,7 +23,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
 const OUT_DIR = resolve(REPO, 'vendor/dsh-survey');
 
-const DEFAULT_ASAR = '<dsh-install>/resources/app.asar';
+// Where the installed Harness keeps its bundle. Pass it as the first argument or
+// set DSH_ASAR; there is no sensible default because the install path differs per
+// machine.
+const DEFAULT_ASAR = process.env.DSH_ASAR ?? '';
 
 /** Files copied out verbatim, with the reason each one is worth keeping. */
 const TARGETS = [
@@ -91,6 +95,9 @@ async function readAsar(asarPath) {
 }
 
 const asarPath = resolve(process.argv[2] ?? DEFAULT_ASAR);
+if (asarPath === '') {
+  throw new Error('pass the installed app.asar path, or set DSH_ASAR to it');
+}
 const asar = await readAsar(asarPath);
 
 await mkdir(OUT_DIR, { recursive: true });
