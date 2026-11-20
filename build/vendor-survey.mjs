@@ -3,13 +3,13 @@
  *
  *   node build/vendor-survey.mjs <path-to-app.asar>
  *
- * 数据来源为本地安装的 DeepSeek Harness，因此 app.asar 路径须由命令行参数或环境变量
- * `DSH_ASAR` 显式指定，不存在适用于所有机器的默认路径。抽取结果写入 `vendor/dsh-survey/`，
- * 由 `build/validate-coverage.mjs` 读取，使覆盖校验无需依赖能够读取压缩包内部的 shell。
+ * 数据来源为本地安装的 DeepSeek Harness，app.asar 路径须由命令行参数或环境变量
+ * `DSH_ASAR` 显式指定，没有适用于所有机器的默认路径。抽取结果写入 `vendor/dsh-survey/`，
+ * 由 `build/validate-coverage.mjs` 读取，覆盖校验不依赖能读取压缩包内部的 shell。
  *
  * ASAR 结构（pickled 头）：偏移 12 处为小端 uint32 `headerSize`；JSON 目录自偏移 16
  * 开始；正文自 `16 + ceil(headerSize / 4) * 4` 开始。缺少数值 `size`/`offset` 的条目
- * 为链接而非文件，应跳过。
+ * 是链接，应跳过。
  */
 
 import { open, mkdir, writeFile } from 'node:fs/promises';

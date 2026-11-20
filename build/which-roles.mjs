@@ -2,7 +2,7 @@
  * 打印令牌表引用的 Material 3 角色。
  *
  * 开发期辅助工具，不属于校验流水线；覆盖门禁由 `build/validate-coverage.mjs` 执行。
- * 本脚本汇总 `src/parts/token-map.js` 中各类令牌引用的角色，与
+ * 汇总 `src/parts/token-map.js` 中各类令牌引用的角色，与
  * `src/parts/palette-spec.js` 声明的角色表比对，列出被引用、未使用和未声明的角色。
  *
  *   node build/which-roles.mjs

@@ -1,11 +1,11 @@
 /**
- * 本插件接管的 DSH 令牌，按基础样式表的分层方式分组。此处出现的每个名称均由
- * DSH 随包样式表声明，因此不会产生产品从不读取的变量。
+ * 插件接管的 DSH 令牌，按基础样式表的分层方式分组。每个名称均由 DSH 随包样式表
+ * 声明，不会产生产品从不读取的变量。
  *
- * 映射遵循 Material 3 的两条规则，而非产品自身的分层模型：
+ * 映射采用 Material 3 的分层模型：
  *
- *   1. 层级用表面容器色调阶梯表达，不使用描边或投影。四个浅色边框令牌因此被赋值为
- *      `transparent`，高程组合值被赋值为 `none`。
+ *   1. 层级用表面容器色调阶梯表达，不使用描边或投影。四个浅色边框令牌赋值为
+ *      `transparent`，高程组合值赋值为 `none`。
  *   2. 交互用 on-surface 状态层表达，不透明度按规范取值（悬停 8%、按压 12%），
  *      不使用阴影。
  */
@@ -87,7 +87,7 @@ export const ROLE_TOKENS = {
   '--dsw-alias-label-primary-bluish': 'primary',
   '--dsw-alias-label-on-color': 'onPrimary',
 
-  // 卡片按表面而非面板处理：比页面高一档，悬停时再高一档。M3 以此表示可悬停表面。
+  // 卡片按表面处理：比页面高一档，悬停时再高一档。M3 以此表示可悬停表面。
   '--dsw-alias-card-fill': 'surfaceContainerLow',
   '--dsw-alias-card-fill-hover': 'surfaceContainer',
   '--dsw-alias-hovercard-bg': 'inverseSurface',
@@ -99,8 +99,8 @@ export const ROLE_TOKENS = {
   '--dsw-alias-toast-action': 'inversePrimary',
   '--dsw-alias-tooltip-label': 'inverseOnSurface',
 
-  // 图表系列与轨迹强调色属于数据色：第一条系列使用强调角色，从而与其余颜色一同
-  // 随种子色变化。
+  // 图表系列与轨迹强调色属于数据色：第一条系列使用强调角色，与其余颜色一样随
+  // 种子色变化。
   '--dsw-alias-chart-messages': 'primary',
   '--dsw-alias-chart-system': 'outline',
   '--dsw-alias-chart-tools': 'tertiary',
@@ -137,7 +137,7 @@ export const ROLE_TOKENS = {
  * 必须消失的令牌。
  *
  * `border-l1`/`l2`/`l4` 是产品的浅色分隔线（4%–16% 不透明度）。这些令牌还被 14 处
- * 分隔线、开关轨道和高程组合值当作颜料使用，因此相关位置由样式表显式重绘，其余
+ * 分隔线、开关轨道和高程组合值当作颜料使用，相关位置由样式表显式重绘，其余
  * 位置在此赋值为透明。
  */
 export const CLEARED_TOKENS = [
@@ -174,7 +174,7 @@ export const STATE_LAYER_TOKENS = {
   '--dsw-alias-interactive-bg-hover-danger': { role: 'error', weight: 12, into: null },
   '--dsw-alias-turn-trigger-bg-hover': { role: 'onSurface', weight: 8, into: 'surface' },
   '--dsw-alias-button-primary-fill': { role: 'primary' },
-  // 实心按钮悬停将 on-primary 叠在 primary 上，无需阴影即可呈现悬停状态。
+  // 实心按钮悬停：on-primary 以 8% 叠在 primary 上。
   '--dsw-alias-button-primary-hover': { role: 'onPrimary', weight: 8, into: 'primary' },
   '--dsw-alias-button-primary-dimmed': { role: 'onPrimary', weight: 12, into: 'primary' },
   '--dsw-alias-button-info-hover': { role: 'onPrimary', weight: 8, into: 'primary' },
@@ -217,7 +217,7 @@ export const MIX_TOKENS = {
   '--dsw-alias-label-shimmer': { role: 'onSurface', into: 'surface', weight: 30 },
 };
 
-/** 保持字面量的令牌：它们描述插图，而非主题表面。 */
+/** 保持字面量的令牌：描述插图本身，不参与主题表面配色。 */
 export const LITERAL_TOKENS = {
   '--dsw-alias-bg-mask-photo': '#000000e0',
   '--dsw-alias-bg-mask-drop': '#ffffffb3',
@@ -250,8 +250,8 @@ export const ILLUSTRATION_TOKENS = {
  * 高程组合值与阴影档位。
  *
  * 这五个名称构成 DSH 中「深度」的全部视觉语言：一道 0.5dp 描边加两层极淡光晕。
- * Material 3 仅靠色调表达深度，因此这些组合值全部解析为 `none`。有两类组件会在
- * 自身元素上重绑 `--dsw-elevation-stroke-color`，故清空的是组合值本身，而非其颜色。
+ * Material 3 仅靠色调表达深度，这些组合值全部解析为 `none`。部分组件会在自身元素上
+ * 重绑 `--dsw-elevation-stroke-color`，故清空的是组合值本身。
  */
 export const ELEVATION_TOKENS = [
   '--dsw-shadow-lv1',

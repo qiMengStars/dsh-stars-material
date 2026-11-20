@@ -2,13 +2,13 @@
  * 构建期的调色板生成器。
  *
  * 读取 `vendor/material-color-utilities` 中 vendored 的 Material Color Utilities，
- * 生成 `src/generated/palettes.js`：一个普通 JavaScript 模块，包含插件在不查询操作系统
- * 的前提下可显示的全部配色。Client 端据此无需携带色彩库，切换预设也无需与 Host 往返。
+ * 生成 `src/generated/palettes.js`：普通 JavaScript 模块，包含插件在不查询操作系统的
+ * 前提下可显示的全部配色。Client 端据此无需携带色彩库，切换预设也无需与 Host 往返。
  *
  *   node build/generate-palettes.mjs
  *
  * 自动模式（跟随系统强调色）不在此生成，其配色由 Host 端在运行时从操作系统推导。
- * 本脚本仅覆盖设置页手动模式提供的 8 个 Material 3 预设。
+ * 只覆盖设置页手动模式提供的 8 个 Material 3 预设。
  *
  * 产物采用紧凑格式：每套配色编码为一条十六进制字符串，包含 45 个角色 × 6 位，
  * 按 ROLES 顺序排列，并去掉每个颜色值开头的 `#`。
@@ -62,8 +62,8 @@ const MIN_CONTRAST = {
  * 需在每一种容器色上保持可读的正文配对。
  *
  * `label-tertiary` 是产品中使用最多的次要文字颜色，除页面底色外，还用于卡片、菜单
- * 和选中行填充。Material 3 要求这些场景的对比度不低于 4.5:1，因此每套配色须对
- * 全部容器色逐一校验，而非仅校验 `surface`。
+ * 和选中行填充。Material 3 要求这些场景的对比度不低于 4.5:1，每套配色对全部容器
+ * 色逐一校验。
  */
 const TEXT_CONTRAST_PAIRS = [
   ['onSurfaceVariant', 'surface'],

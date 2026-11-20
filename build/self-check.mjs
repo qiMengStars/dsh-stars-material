@@ -18,7 +18,7 @@
  *
  *   node build/self-check.mjs
  *
- * 本脚本校验数据与接线，不涉及运行中的应用的视觉表现。
+ * 校验数据与接线，不涉及运行中的应用的视觉表现。
  */
 
 import { readFile } from 'node:fs/promises';

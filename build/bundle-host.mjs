@@ -3,12 +3,11 @@
  *
  *   node build/bundle-host.mjs
  *
- * Host 端需要 Material Color Utilities 实现（用于从系统强调色推导配色）和配色引擎，
- * Client 端不携带这两项。本脚本将其复制到 `plugin/lib/`，使发布包自带依赖，
- * 安装时无需 `node_modules`。
+ * 将 Client 端缺失的 Host 端依赖复制到 `plugin/lib/`：Material Color Utilities 实现
+ * （用于从系统强调色推导配色）与配色引擎，使发布包自带依赖、安装时无需
+ * `node_modules`。
  *
- * 与 `build/bundle-client.mjs` 不同，本脚本不做源码拼接：Host 产物保持为普通 Node ESM
- * 模块图，`import` 声明原样保留，各模块作用域独立。
+ * Host 产物保持为普通 Node ESM 模块图：`import` 声明原样保留，各模块作用域独立。
  *
  * 产物：
  *   plugin/lib/mcu/index.js      vendored 库的入口
@@ -30,8 +29,8 @@ const MCU_OUT = resolve(LIB, 'mcu');
 /**
  * 复制到发布包中的 vendored 库条目。
  *
- * 整树复制而非筛选子集：`index.js` 会再导出每个目录，裁剪子集需要改动第三方入口文件。
- * 这些代码仅在 Host 端运行，整树约 340 KB；维护手工子集会随间接 import 变化而失效。
+ * 整树复制：`index.js` 再导出每个目录，裁剪子集需要改动第三方入口文件；手工维护的
+ * 子集会随间接 import 变化而失效。这些代码仅在 Host 端运行，整树约 340 KB。
  */
 const KEEP = [
   'index.js',
@@ -48,17 +47,6 @@ const KEEP = [
   'temperature',
   'utils',
 ];
-
-/** 读取模块源码，将相对 import 路径改写为在 `plugin/lib` 中可解析的形式。 */
-function rewriteSpecifiers(source, moduleResolver) {
-  return source.replace(
-    /(\bfrom\s*|\bimport\s*\(\s*)(['"])(\.\.?\/[^'"]+)\2/gu,
-    (whole, head, quote, specifier) => {
-      const resolved = moduleResolver(specifier);
-      return resolved === null ? whole : head + quote + resolved + quote;
-    },
-  );
-}
 
 async function main() {
   await rm(MCU_OUT, { recursive: true, force: true });
@@ -99,7 +87,7 @@ async function main() {
   const palette = `/**
  * Host 端的配色引擎 —— 由 build/bundle-host.mjs 生成。
  *
- * 本模块合并角色表、配色引擎，以及引擎依赖的 Material Color Utilities 命名空间，
+ * 合并角色表、配色引擎，以及引擎依赖的 Material Color Utilities 命名空间，
  * 三者必须彼此一致。重新生成时执行：
  *
  *   node build/bundle-host.mjs

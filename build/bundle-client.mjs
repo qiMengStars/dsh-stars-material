@@ -3,9 +3,9 @@
  *
  * Harness 通过 `window.__ModuleLoader__.load({ id, factory })` 加载浏览器产物。
  * factory 收到的 `require` 只能解析宿主暴露的模块（`react`），不解析相对路径，
- * 产物也不走 ESM 加载流程。因此 `plugin/client.js` 必须是一个自包含脚本。
+ * 产物也不走 ESM 加载流程，`plugin/client.js` 必须是一个自包含脚本。
  *
- * 本脚本按 MODULES 的顺序拼接 `src/` 下的 ESM 源码：移除 import 声明和 export
+ * 按 MODULES 的顺序拼接 `src/` 下的 ESM 源码：移除 import 声明和 export
  * 关键字，其余内容原样保留。`src/client/main.js` 排在最后，提供 applyClient(ctx)，
  * 由文件末尾的包装交给加载器。
  *

@@ -1,11 +1,11 @@
 /**
  * 构建脚本与 Host 端共用的配色引擎。
  *
- * 所有入口均由 `createPaletteEngine(mcu)` 生成：该函数接收 Material Color Utilities
- * 的模块对象作为参数，而非直接 import。同一实现因此可用于两个不同的加载器：
+ * 所有入口均由 `createPaletteEngine(mcu)` 生成。该函数接收 Material Color Utilities
+ * 的模块对象作为参数，本身不 import 该库，同一实现可供两个加载器使用：
  *
  *   - `build/generate-palettes.mjs` 直接传入 vendored 目录。
- *   - `plugin/lib/palette.js` 由本文件与 `src/parts/palette-spec.js` 拼接而成，随包携带
+ *   - `plugin/lib/palette.js` 由此文件与 `src/parts/palette-spec.js` 拼接而成，随包携带
  *     `plugin/lib/mcu/` 中的依赖。
  *
  * 文件中唯一的 import 是角色表，打包拼接时会移除该声明（见 `build/bundle-client.mjs`
@@ -95,10 +95,9 @@ export function createPaletteEngine(mcu) {
   }
 
   /**
-   * 用本插件唯一的调和方式，从种子色推导明暗两套方案。
+   * 用插件采用的调和方式，从种子色推导明暗两套方案。
    *
-   * tonal spot 是 Material 3 的默认方案，因此从一个预设得到的即是设计系统文档中的
-   * 角色表，而非近似值。
+   * tonal spot 是 Material 3 的默认方案，从任一预设得到的角色表与设计系统文档一致。
    */
   function paletteFromSeed(seedHex) {
     const source = Hct.fromInt(argbFromHex(seedHex));

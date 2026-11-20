@@ -1,20 +1,16 @@
 /**
  * 主题包的 Client 半边。
  *
- * applyClient(ctx) 依次完成下列操作：
+ * applyClient(ctx) 完成以下工作：
  *
- *   1. 读取存档中的偏好（是否启用、取色来源、预设）。
- *   2. 解析当前取色来源的配色。手动模式直接切换构建期生成的预设表；自动模式向
- *      Host 半边请求操作系统强调色及由其推导的配色，浏览器内无需运行色彩库。
- *   3. 由该配色推导出扁平的 `Record<token, { light, dark }>`。该过程为纯函数，
- *      不访问 DOM、系统时钟或随机数。
- *   4. 安装以下几层：
- *        a. `theme.overrideTokens(source, tokens)` 按令牌逐项换色。覆盖层按令牌叠加
- *           在当前主题之上，既能覆盖内置配色，也不与第三方主题争用偏好。
- *        b. `theme.register()` 注册 `stars-material-light` / `stars-material-dark`，
- *           使主题出现在 `getTheme().themes` 中，可被 `setTheme` 选中。
- *        c. `:root` 上的 `--dsh-m3-*` 桥接属性，使样式表按角色取色，无需重复定义
- *           配色。
+ *   1. 读取存档中的偏好：是否启用、取色来源、预设。
+ *   2. 解析当前来源的配色。手动模式切换构建期生成的预设表；自动模式向 Host 半边
+ *      请求操作系统强调色及其推导的配色，浏览器内不运行色彩库。
+ *   3. 由配色推导扁平的 `Record<token, { light, dark }>`。该过程为纯函数，不访问
+ *      DOM、系统时钟或随机数。
+ *   4. 安装主题层：`theme.overrideTokens()` 按令牌逐项换色，`theme.register()`
+ *      注册 `stars-material-light` / `stars-material-dark`，并在 `:root` 上写入
+ *      `--dsh-m3-*` 桥接属性供样式表按角色取色。
  *   5. 注入一个 `<style>`，承载令牌注册表无法表达的内容：形状刻度、缓动曲线、
  *      原由边框色提供的颜料，以及 Material 3 不绘制的描边。
  *   6. 提供设置页。
@@ -241,7 +237,7 @@ function writeStorage(key, value) {
   try {
     window.localStorage.setItem(key, value);
   } catch {
-    // 存储被禁用的 profile 仅在内存中保留本次选择。
+    // 存储被禁用时，选择只在内存中保留，刷新后失效。
   }
 }
 
@@ -382,7 +378,7 @@ const SETTINGS_STYLE = `
  * 标签。
  *
  * 设置页规则始终存在；主题规则（形状刻度、缓动曲线、描边清除、桥接变量的使用方）
- * 仅在主题开启时写入，因此关闭主题可恢复原样。
+ * 仅在主题开启时写入，关闭主题可恢复原样。
  */
 function installStyles() {
   const selector = 'style[data-plugin-css=' + JSON.stringify(STYLE_TAG_ID) + ']';
@@ -538,8 +534,8 @@ function describeSystem(state, t) {
 /**
  * 为一份已解析的配色安装全部主题层。
  *
- * 返回的清理函数仅移除本次调用添加的层。`register()` 不接受重复 id，因此更换配色
- * 时必须先清理再注册，这也是注册表操作集中于单个位置的原因。
+ * 返回的清理函数仅移除它自己安装的层。`register()` 不接受重复 id，因此更换配色
+ * 时必须先清理再注册；注册表操作集中在这一层。
  */
 function createThemeLayers(theme, enabled, palette) {
   if (!enabled) {
@@ -663,7 +659,7 @@ function applyClient(ctx) {
     publish();
   };
 
-  /** 正在等待的重试句柄，用于在更换配色时取消。 */
+  /** 待触发的重试句柄；更换配色时取消。 */
   let retryTimer = null;
 
   const cancelRetry = () => {

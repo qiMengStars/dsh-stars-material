@@ -36,8 +36,8 @@ const PRESET_TABLE = {"baseline":{"light":"65558fffffffe9ddff4d3d75625b71ffffffe
  * M3 方案派生的 ARGB getter。`surfaceTint` 不是 `DynamicScheme` 的 getter，生成器
  * 改从 `MaterialDynamicColors.surfaceTint` 取。
  *
- * 后 8 项是 Material 3 未定义、但聊天应用需要的语义色对（成功 / 警告）。取值来自
- * 固定色调板，与种子色无关，因此始终维持可辨认的绿色与琥珀色。
+ * 后 8 项是 Material 3 未定义、聊天应用需要的语义色对（成功 / 警告）。取值来自固定
+ * 色调板，与种子色无关，绿色与琥珀色在各套配色中保持一致。
  */
 const ROLE_ORDER = [
   'primary',
@@ -96,9 +96,9 @@ const SCHEME_ROLE_ORDER = ROLE_ORDER;
 /**
  * 本插件只保留一种调和方式。
  *
- * Material 3 提供九种方案变体。全部暴露后，设置页退化为取色器，配色也难以用单一
- * 描述说明。tonal spot 是 M3 的默认方案，也是文档最先介绍的一种，因此只保留该变体。
- * 变体 id 仍保留在数据结构中，因为存档偏好与生成表仍按该 id 取键。
+ * Material 3 提供九种方案变体。全部暴露会使设置页退化为取色器，配色也难以用单一
+ * 描述说明。tonal spot 是 M3 的默认方案，文档首先介绍该方案，插件只保留这一种。
+ * 变体 id 保留在数据结构中：存档偏好与生成表按该 id 取键。
  */
 const VARIANT_ID = 'tonalSpot';
 
@@ -108,8 +108,8 @@ const VARIANT_CLASS = 'SchemeTonalSpot';
 /**
  * 手动模式提供的 8 个 Material 3 预设。
  *
- * 种子色取自 M3 为基线配色公布的色值，选择某预设得到的即是文档中的 `#6750A4`
- * 角色表，而非近似值。自动模式不使用该列表，其在运行时由操作系统强调色推导配色。
+ * 种子色取自 M3 为基线配色公布的色值，选择某预设得到与该方案文档一致的 `#6750A4`
+ * 角色表。自动模式不使用该列表，运行时由操作系统强调色推导配色。
  */
 const PRESETS = [
   { id: 'baseline', hex: '#6750a4', label: 'Material baseline' },
@@ -157,13 +157,13 @@ const BRIDGE_ROLES = [
 
 /* ---- src/parts/token-map.js ---- */
 /**
- * 本插件接管的 DSH 令牌，按基础样式表的分层方式分组。此处出现的每个名称均由
- * DSH 随包样式表声明，因此不会产生产品从不读取的变量。
+ * 插件接管的 DSH 令牌，按基础样式表的分层方式分组。每个名称均由 DSH 随包样式表
+ * 声明，不会产生产品从不读取的变量。
  *
- * 映射遵循 Material 3 的两条规则，而非产品自身的分层模型：
+ * 映射采用 Material 3 的分层模型：
  *
- *   1. 层级用表面容器色调阶梯表达，不使用描边或投影。四个浅色边框令牌因此被赋值为
- *      `transparent`，高程组合值被赋值为 `none`。
+ *   1. 层级用表面容器色调阶梯表达，不使用描边或投影。四个浅色边框令牌赋值为
+ *      `transparent`，高程组合值赋值为 `none`。
  *   2. 交互用 on-surface 状态层表达，不透明度按规范取值（悬停 8%、按压 12%），
  *      不使用阴影。
  */
@@ -245,7 +245,7 @@ const ROLE_TOKENS = {
   '--dsw-alias-label-primary-bluish': 'primary',
   '--dsw-alias-label-on-color': 'onPrimary',
 
-  // 卡片按表面而非面板处理：比页面高一档，悬停时再高一档。M3 以此表示可悬停表面。
+  // 卡片按表面处理：比页面高一档，悬停时再高一档。M3 以此表示可悬停表面。
   '--dsw-alias-card-fill': 'surfaceContainerLow',
   '--dsw-alias-card-fill-hover': 'surfaceContainer',
   '--dsw-alias-hovercard-bg': 'inverseSurface',
@@ -257,8 +257,8 @@ const ROLE_TOKENS = {
   '--dsw-alias-toast-action': 'inversePrimary',
   '--dsw-alias-tooltip-label': 'inverseOnSurface',
 
-  // 图表系列与轨迹强调色属于数据色：第一条系列使用强调角色，从而与其余颜色一同
-  // 随种子色变化。
+  // 图表系列与轨迹强调色属于数据色：第一条系列使用强调角色，与其余颜色一样随
+  // 种子色变化。
   '--dsw-alias-chart-messages': 'primary',
   '--dsw-alias-chart-system': 'outline',
   '--dsw-alias-chart-tools': 'tertiary',
@@ -295,7 +295,7 @@ const ROLE_TOKENS = {
  * 必须消失的令牌。
  *
  * `border-l1`/`l2`/`l4` 是产品的浅色分隔线（4%–16% 不透明度）。这些令牌还被 14 处
- * 分隔线、开关轨道和高程组合值当作颜料使用，因此相关位置由样式表显式重绘，其余
+ * 分隔线、开关轨道和高程组合值当作颜料使用，相关位置由样式表显式重绘，其余
  * 位置在此赋值为透明。
  */
 const CLEARED_TOKENS = [
@@ -332,7 +332,7 @@ const STATE_LAYER_TOKENS = {
   '--dsw-alias-interactive-bg-hover-danger': { role: 'error', weight: 12, into: null },
   '--dsw-alias-turn-trigger-bg-hover': { role: 'onSurface', weight: 8, into: 'surface' },
   '--dsw-alias-button-primary-fill': { role: 'primary' },
-  // 实心按钮悬停将 on-primary 叠在 primary 上，无需阴影即可呈现悬停状态。
+  // 实心按钮悬停：on-primary 以 8% 叠在 primary 上。
   '--dsw-alias-button-primary-hover': { role: 'onPrimary', weight: 8, into: 'primary' },
   '--dsw-alias-button-primary-dimmed': { role: 'onPrimary', weight: 12, into: 'primary' },
   '--dsw-alias-button-info-hover': { role: 'onPrimary', weight: 8, into: 'primary' },
@@ -375,7 +375,7 @@ const MIX_TOKENS = {
   '--dsw-alias-label-shimmer': { role: 'onSurface', into: 'surface', weight: 30 },
 };
 
-/** 保持字面量的令牌：它们描述插图，而非主题表面。 */
+/** 保持字面量的令牌：描述插图本身，不参与主题表面配色。 */
 const LITERAL_TOKENS = {
   '--dsw-alias-bg-mask-photo': '#000000e0',
   '--dsw-alias-bg-mask-drop': '#ffffffb3',
@@ -408,8 +408,8 @@ const ILLUSTRATION_TOKENS = {
  * 高程组合值与阴影档位。
  *
  * 这五个名称构成 DSH 中「深度」的全部视觉语言：一道 0.5dp 描边加两层极淡光晕。
- * Material 3 仅靠色调表达深度，因此这些组合值全部解析为 `none`。有两类组件会在
- * 自身元素上重绑 `--dsw-elevation-stroke-color`，故清空的是组合值本身，而非其颜色。
+ * Material 3 仅靠色调表达深度，这些组合值全部解析为 `none`。部分组件会在自身元素上
+ * 重绑 `--dsw-elevation-stroke-color`，故清空的是组合值本身。
  */
 const ELEVATION_TOKENS = [
   '--dsw-shadow-lv1',
@@ -452,14 +452,14 @@ const MOTION_TOKENS = {
  * 颜料来自本主题透明化令牌的规则。本表补足三类缺口：
  *
  *   1. 原本以边框色作为颜料的位置。部分分隔线、进度条轨道与表格行分隔使用
- *      --dsw-alias-border-l1 / l2 / l3 / l4 上色。这些令牌现已透明，选择器稳定的
- *      相关位置改用表面阶梯重绘。
+ *      --dsw-alias-border-l1 / l2 / l3 / l4 上色。这些令牌现已透明，选择器能命中
+ *      的位置改用表面阶梯重绘。
  *   2. 必须消失的声明。Material 3 不在输入框或错误徽标外绘制描边，相应边框声明
- *      因此归零。仅调整 border*，不调整 outline。
+ *      归零。仅调整 border*，不调整 outline。
  *   3. 令牌无法承载的值。包括圆角刻度、缓动曲线与交互转场。
  *
  * 其余部分交给令牌层。下列规则不针对 CSS Module 哈希类名、产品类名或布局细节：
- * 选择器仅使用标签名、ARIA 角色与 data 属性，因此 DSH 升级后仍然适用。
+ * 选择器仅使用标签名、ARIA 角色与 data 属性，DSH 升级后仍然适用。
  */
 
 
@@ -471,7 +471,7 @@ const declarations = (tokens) =>
 /**
  * 仅在主题开启时生效的规则。
  *
- * 桥接变量（--dsh-m3-*）由主题令牌层写入，因此下列值随当前配色自动变化。
+ * 桥接变量（--dsh-m3-*）由主题令牌层写入，下列值随当前配色自动变化。
  */
 const THEME_RULES = `
 :root {
@@ -483,8 +483,8 @@ const THEME_RULES = `
  * 1. 原来以边框令牌作为颜料的位置
  * ------------------------------------------------------------------------- */
 
-/* Markdown 与通用分隔线：改为 outline-variant 色调的 1dp 细线，不用 10% 黑的
- * 0.5dp 发丝线。 */
+/* Markdown 与通用分隔线：1dp、outline-variant 色调。产品原本使用 10% 黑的
+ * 0.5dp 发丝线，该两个令牌在本主题中为透明。 */
 hr {
   border: 0;
   height: 1px;
@@ -511,8 +511,8 @@ progress::-webkit-progress-bar {
   border-radius: 999px;
 }
 
-/* 开关轨道原本由 border-l3 上色，该令牌在本主题中为透明，因此改由 outline-variant
- * 色调重绘：既保持轨道可辨，又不会变为一条分隔线。 */
+/* 开关轨道：产品以 border-l3 上色，该令牌在本主题中为透明，改用
+ * outline-variant 重绘，轨道保持可辨。 */
 [role="switch"][aria-checked="false"] {
   background: var(--dsh-m3-outline-variant);
 }
@@ -541,9 +541,9 @@ tr[data-turn-start="true"]:not(:first-child) > td {
  * 2. Material 3 不绘制的描边
  * ------------------------------------------------------------------------- */
 
-/* 填充式输入框：由容器色调托住输入区，聚焦以下方聚焦环表示，而非将边框染成主色。
- * 该规则覆盖那些将 outline 设为 none、改用 border 表示聚焦的组件规则；仅添加
- * 聚焦环，不删除聚焦环。 */
+/* 填充式输入框：输入区由容器色调承载，聚焦状态以下方聚焦环表示。产品中有部分
+ * 组件把 outline 设为 none、以 border 颜色表示聚焦，本规则为这些元素补上聚焦环；
+ * 不删除任何既有聚焦环。 */
 input:focus,
 textarea:focus,
 select:focus,
@@ -600,20 +600,16 @@ button,
 /**
  * 主题包的 Client 半边。
  *
- * applyClient(ctx) 依次完成下列操作：
+ * applyClient(ctx) 完成以下工作：
  *
- *   1. 读取存档中的偏好（是否启用、取色来源、预设）。
- *   2. 解析当前取色来源的配色。手动模式直接切换构建期生成的预设表；自动模式向
- *      Host 半边请求操作系统强调色及由其推导的配色，浏览器内无需运行色彩库。
- *   3. 由该配色推导出扁平的 `Record<token, { light, dark }>`。该过程为纯函数，
- *      不访问 DOM、系统时钟或随机数。
- *   4. 安装以下几层：
- *        a. `theme.overrideTokens(source, tokens)` 按令牌逐项换色。覆盖层按令牌叠加
- *           在当前主题之上，既能覆盖内置配色，也不与第三方主题争用偏好。
- *        b. `theme.register()` 注册 `stars-material-light` / `stars-material-dark`，
- *           使主题出现在 `getTheme().themes` 中，可被 `setTheme` 选中。
- *        c. `:root` 上的 `--dsh-m3-*` 桥接属性，使样式表按角色取色，无需重复定义
- *           配色。
+ *   1. 读取存档中的偏好：是否启用、取色来源、预设。
+ *   2. 解析当前来源的配色。手动模式切换构建期生成的预设表；自动模式向 Host 半边
+ *      请求操作系统强调色及其推导的配色，浏览器内不运行色彩库。
+ *   3. 由配色推导扁平的 `Record<token, { light, dark }>`。该过程为纯函数，不访问
+ *      DOM、系统时钟或随机数。
+ *   4. 安装主题层：`theme.overrideTokens()` 按令牌逐项换色，`theme.register()`
+ *      注册 `stars-material-light` / `stars-material-dark`，并在 `:root` 上写入
+ *      `--dsh-m3-*` 桥接属性供样式表按角色取色。
  *   5. 注入一个 `<style>`，承载令牌注册表无法表达的内容：形状刻度、缓动曲线、
  *      原由边框色提供的颜料，以及 Material 3 不绘制的描边。
  *   6. 提供设置页。
@@ -840,7 +836,7 @@ function writeStorage(key, value) {
   try {
     window.localStorage.setItem(key, value);
   } catch {
-    // 存储被禁用的 profile 仅在内存中保留本次选择。
+    // 存储被禁用时，选择只在内存中保留，刷新后失效。
   }
 }
 
@@ -981,7 +977,7 @@ const SETTINGS_STYLE = `
  * 标签。
  *
  * 设置页规则始终存在；主题规则（形状刻度、缓动曲线、描边清除、桥接变量的使用方）
- * 仅在主题开启时写入，因此关闭主题可恢复原样。
+ * 仅在主题开启时写入，关闭主题可恢复原样。
  */
 function installStyles() {
   const selector = 'style[data-plugin-css=' + JSON.stringify(STYLE_TAG_ID) + ']';
@@ -1137,8 +1133,8 @@ function describeSystem(state, t) {
 /**
  * 为一份已解析的配色安装全部主题层。
  *
- * 返回的清理函数仅移除本次调用添加的层。`register()` 不接受重复 id，因此更换配色
- * 时必须先清理再注册，这也是注册表操作集中于单个位置的原因。
+ * 返回的清理函数仅移除它自己安装的层。`register()` 不接受重复 id，因此更换配色
+ * 时必须先清理再注册；注册表操作集中在这一层。
  */
 function createThemeLayers(theme, enabled, palette) {
   if (!enabled) {
@@ -1262,7 +1258,7 @@ function applyClient(ctx) {
     publish();
   };
 
-  /** 正在等待的重试句柄，用于在更换配色时取消。 */
+  /** 待触发的重试句柄；更换配色时取消。 */
   let retryTimer = null;
 
   const cancelRetry = () => {

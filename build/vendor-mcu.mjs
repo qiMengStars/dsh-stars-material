@@ -1,15 +1,15 @@
 /**
  * 重新生成 vendor 目录下的 Material Color Utilities 副本。
  *
- * 上游包为 ESM，相对 import 不带 `.js` 后缀，Node 无法解析；仓库因此在
- * `vendor/material-color-utilities` 保留一份补齐后缀的副本。本脚本从已安装的包复现该副本：
- * 先将包安装到任意可写目录，再将包路径作为命令行参数传入。
+ * 上游包为 ESM，相对 import 不带 `.js` 后缀，Node 无法解析。仓库因此在
+ * `vendor/material-color-utilities` 保留一份补齐后缀的副本，脚本从已安装的包复现：
+ * 先将包安装到任意可写目录，再把包路径作为命令行参数传入。
  *
  *   cmd /c "npm install @material/material-color-utilities@0.4.0 --no-audit --no-fund --ignore-scripts --cache %TEMP%\mcu-cache --prefix %TEMP%\mcu"
  *   node build/vendor-mcu.mjs %TEMP%\mcu\node_modules\@material\material-color-utilities
  *
- * 包路径必须显式给出，不存在适用于所有机器的默认路径。生成的副本由
- * `build/generate-palettes.mjs` 加载，使配色流水线不依赖仓库之外的文件。
+ * 包路径必须显式给出，没有适用于所有机器的默认路径。生成的副本由
+ * `build/generate-palettes.mjs` 加载，配色流水线不依赖仓库之外的文件。
  * Material Color Utilities 采用 Apache-2.0 许可证，LICENSE 一并复制。
  */
 

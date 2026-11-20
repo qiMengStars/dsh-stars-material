@@ -1,7 +1,7 @@
 /**
  * Host 端的配色引擎 —— 由 build/bundle-host.mjs 生成。
  *
- * 本模块合并角色表、配色引擎，以及引擎依赖的 Material Color Utilities 命名空间，
+ * 合并角色表、配色引擎，以及引擎依赖的 Material Color Utilities 命名空间，
  * 三者必须彼此一致。重新生成时执行：
  *
  *   node build/bundle-host.mjs
@@ -16,8 +16,8 @@ import * as mcu from './mcu/index.js';
  * M3 方案派生的 ARGB getter。`surfaceTint` 不是 `DynamicScheme` 的 getter，生成器
  * 改从 `MaterialDynamicColors.surfaceTint` 取。
  *
- * 后 8 项是 Material 3 未定义、但聊天应用需要的语义色对（成功 / 警告）。取值来自
- * 固定色调板，与种子色无关，因此始终维持可辨认的绿色与琥珀色。
+ * 后 8 项是 Material 3 未定义、聊天应用需要的语义色对（成功 / 警告）。取值来自固定
+ * 色调板，与种子色无关，绿色与琥珀色在各套配色中保持一致。
  */
 const ROLE_ORDER = [
   'primary',
@@ -76,9 +76,9 @@ const SCHEME_ROLE_ORDER = ROLE_ORDER;
 /**
  * 本插件只保留一种调和方式。
  *
- * Material 3 提供九种方案变体。全部暴露后，设置页退化为取色器，配色也难以用单一
- * 描述说明。tonal spot 是 M3 的默认方案，也是文档最先介绍的一种，因此只保留该变体。
- * 变体 id 仍保留在数据结构中，因为存档偏好与生成表仍按该 id 取键。
+ * Material 3 提供九种方案变体。全部暴露会使设置页退化为取色器，配色也难以用单一
+ * 描述说明。tonal spot 是 M3 的默认方案，文档首先介绍该方案，插件只保留这一种。
+ * 变体 id 保留在数据结构中：存档偏好与生成表按该 id 取键。
  */
 const VARIANT_ID = 'tonalSpot';
 
@@ -88,8 +88,8 @@ const VARIANT_CLASS = 'SchemeTonalSpot';
 /**
  * 手动模式提供的 8 个 Material 3 预设。
  *
- * 种子色取自 M3 为基线配色公布的色值，选择某预设得到的即是文档中的 `#6750A4`
- * 角色表，而非近似值。自动模式不使用该列表，其在运行时由操作系统强调色推导配色。
+ * 种子色取自 M3 为基线配色公布的色值，选择某预设得到与该方案文档一致的 `#6750A4`
+ * 角色表。自动模式不使用该列表，运行时由操作系统强调色推导配色。
  */
 const PRESETS = [
   { id: 'baseline', hex: '#6750a4', label: 'Material baseline' },
@@ -139,11 +139,11 @@ const BRIDGE_ROLES = [
 /**
  * 构建脚本与 Host 端共用的配色引擎。
  *
- * 所有入口均由 `createPaletteEngine(mcu)` 生成：该函数接收 Material Color Utilities
- * 的模块对象作为参数，而非直接 import。同一实现因此可用于两个不同的加载器：
+ * 所有入口均由 `createPaletteEngine(mcu)` 生成。该函数接收 Material Color Utilities
+ * 的模块对象作为参数，本身不 import 该库，同一实现可供两个加载器使用：
  *
  *   - `build/generate-palettes.mjs` 直接传入 vendored 目录。
- *   - `plugin/lib/palette.js` 由本文件与 `src/parts/palette-spec.js` 拼接而成，随包携带
+ *   - `plugin/lib/palette.js` 由此文件与 `src/parts/palette-spec.js` 拼接而成，随包携带
  *     `plugin/lib/mcu/` 中的依赖。
  *
  * 文件中唯一的 import 是角色表，打包拼接时会移除该声明（见 `build/bundle-client.mjs`
@@ -231,10 +231,9 @@ function createPaletteEngine(mcu) {
   }
 
   /**
-   * 用本插件唯一的调和方式，从种子色推导明暗两套方案。
+   * 用插件采用的调和方式，从种子色推导明暗两套方案。
    *
-   * tonal spot 是 Material 3 的默认方案，因此从一个预设得到的即是设计系统文档中的
-   * 角色表，而非近似值。
+   * tonal spot 是 Material 3 的默认方案，从任一预设得到的角色表与设计系统文档一致。
    */
   function paletteFromSeed(seedHex) {
     const source = Hct.fromInt(argbFromHex(seedHex));

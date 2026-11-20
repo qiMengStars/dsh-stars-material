@@ -5,14 +5,14 @@
  * 颜料来自本主题透明化令牌的规则。本表补足三类缺口：
  *
  *   1. 原本以边框色作为颜料的位置。部分分隔线、进度条轨道与表格行分隔使用
- *      --dsw-alias-border-l1 / l2 / l3 / l4 上色。这些令牌现已透明，选择器稳定的
- *      相关位置改用表面阶梯重绘。
+ *      --dsw-alias-border-l1 / l2 / l3 / l4 上色。这些令牌现已透明，选择器能命中
+ *      的位置改用表面阶梯重绘。
  *   2. 必须消失的声明。Material 3 不在输入框或错误徽标外绘制描边，相应边框声明
- *      因此归零。仅调整 border*，不调整 outline。
+ *      归零。仅调整 border*，不调整 outline。
  *   3. 令牌无法承载的值。包括圆角刻度、缓动曲线与交互转场。
  *
  * 其余部分交给令牌层。下列规则不针对 CSS Module 哈希类名、产品类名或布局细节：
- * 选择器仅使用标签名、ARIA 角色与 data 属性，因此 DSH 升级后仍然适用。
+ * 选择器仅使用标签名、ARIA 角色与 data 属性，DSH 升级后仍然适用。
  */
 
 import { MOTION_TOKENS, SHAPE_TOKENS } from '../parts/token-map.js';
@@ -25,7 +25,7 @@ const declarations = (tokens) =>
 /**
  * 仅在主题开启时生效的规则。
  *
- * 桥接变量（--dsh-m3-*）由主题令牌层写入，因此下列值随当前配色自动变化。
+ * 桥接变量（--dsh-m3-*）由主题令牌层写入，下列值随当前配色自动变化。
  */
 export const THEME_RULES = `
 :root {
@@ -37,8 +37,8 @@ export const THEME_RULES = `
  * 1. 原来以边框令牌作为颜料的位置
  * ------------------------------------------------------------------------- */
 
-/* Markdown 与通用分隔线：改为 outline-variant 色调的 1dp 细线，不用 10% 黑的
- * 0.5dp 发丝线。 */
+/* Markdown 与通用分隔线：1dp、outline-variant 色调。产品原本使用 10% 黑的
+ * 0.5dp 发丝线，该两个令牌在本主题中为透明。 */
 hr {
   border: 0;
   height: 1px;
@@ -65,8 +65,8 @@ progress::-webkit-progress-bar {
   border-radius: 999px;
 }
 
-/* 开关轨道原本由 border-l3 上色，该令牌在本主题中为透明，因此改由 outline-variant
- * 色调重绘：既保持轨道可辨，又不会变为一条分隔线。 */
+/* 开关轨道：产品以 border-l3 上色，该令牌在本主题中为透明，改用
+ * outline-variant 重绘，轨道保持可辨。 */
 [role="switch"][aria-checked="false"] {
   background: var(--dsh-m3-outline-variant);
 }
@@ -95,9 +95,9 @@ tr[data-turn-start="true"]:not(:first-child) > td {
  * 2. Material 3 不绘制的描边
  * ------------------------------------------------------------------------- */
 
-/* 填充式输入框：由容器色调托住输入区，聚焦以下方聚焦环表示，而非将边框染成主色。
- * 该规则覆盖那些将 outline 设为 none、改用 border 表示聚焦的组件规则；仅添加
- * 聚焦环，不删除聚焦环。 */
+/* 填充式输入框：输入区由容器色调承载，聚焦状态以下方聚焦环表示。产品中有部分
+ * 组件把 outline 设为 none、以 border 颜色表示聚焦，本规则为这些元素补上聚焦环；
+ * 不删除任何既有聚焦环。 */
 input:focus,
 textarea:focus,
 select:focus,

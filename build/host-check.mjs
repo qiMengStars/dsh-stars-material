@@ -1,9 +1,9 @@
 /**
  * Host 半边的离线检查。
  *
- * 检查重点不是验证 Windows 是否返回强调色（该行为只能在真实桌面环境中验证），
- * 而是验证每条失败路径均以形状完整的 `{ ok: false, reason }` 结束而非抛错，并校验
- * 路由返回的 HTTP 状态码。
+ * 验证每条失败路径均以形状完整的 `{ ok: false, reason }` 结束，不抛错，并校验路由
+ * 返回的 HTTP 状态码。Windows 是否返回强调色只能在真实桌面环境中验证，不在本检查
+ * 范围内。
  */
 
 import { strict as assert } from 'node:assert';
@@ -75,8 +75,7 @@ const noHost = exchange({});
 await registered.handler(noHost.request, noHost.response);
 assert.equal(noHost.state.statusCode, 403, '没有 Host 头的请求必须被拒');
 
-// 无论沙箱如何处理 `reg.exe`，答复都必须是 Client 可据以判断的形状：要么一份配色，
-// 要么一条原因。
+// 答复始终保持 Client 可处理的形状：要么一份配色，要么一条原因。
 const payload = JSON.parse(sameOrigin.state.body);
 assert.equal(typeof payload.ok, 'boolean');
 if (payload.ok) {
