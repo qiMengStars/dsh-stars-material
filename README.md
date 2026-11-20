@@ -1,5 +1,8 @@
 # dsh-stars-material — a Material 3 theme for the DeepSeek Harness
 
+> [!IMPORTANT]
+> made by pure vibe coding
+
 A Material You (Material 3) UI theme for the DeepSeek Harness. It is not a colour
 swap: the theme repaints the harness with Material 3 roles, replaces borders with
 a surface tone ramp, and replaces shadows with state layers.
