@@ -1,117 +1,62 @@
-# dsh-stars-material — a Material 3 theme for the DeepSeek Harness
+# dsh-stars-material
 
 > [!IMPORTANT]
 > made by pure vibe coding
 
-A Material You (Material 3) UI theme for the DeepSeek Harness. It is not a colour
-swap: the theme repaints the harness with Material 3 roles, replaces borders with
-a surface tone ramp, and replaces shadows with state layers.
+适用于 DeepSeek Harness 的 Material 3（Material You）界面主题插件，使用表面色调阶梯替代传统边框，并以状态层替代投影效果。
 
-Open **Settings → Material 3** to switch it on and pick a colour source.
+安装后，前往 **设置 → Material 3** 即可启用主题并配置配色。
 
-## What it changes
+## 功能特性
 
-- **Colour** — 164 `--dsw-*` product tokens are overridden with `{ light, dark }`
-  pairs derived from 45 Material 3 roles. Light and dark are generated together
-  from one seed, so the two schemes always agree.
-- **Hierarchy** — borders are gone. Eleven stroke tokens resolve to `transparent`,
-  and the hierarchy they used to express is carried by the six-step surface ramp
-  (`surface` → `surfaceContainerLow` → … → `surfaceContainerHighest`).
-- **Interaction** — shadows are gone too: the seven elevation tokens resolve to
-  `none`. Hover and pressed states are `on-surface` state layers
-  (`color-mix(in srgb, <onSurface> 8%, transparent)` for hover, 12 % for pressed),
-  and selected rows are a separate container tone.
-- **Shape and motion** — one injected `<style>` sets the six-step radius scale
-  (4/8/12/16/20/28 px) and the motion curves the token registry cannot carry.
-- **Dynamic colour** — in "follow system" mode the Host half reads the Windows
-  accent colour (Electron API, falling back to the registry) and derives all 45
-  Material 3 roles with Material Color Utilities.
+- 基于 Material 3 色彩角色重绘界面，由同一种子色同步生成浅色与深色两套配色方案
+- 移除传统边框与投影，改用多级表面色调区分层级，并通过状态层呈现悬停、按压与选中反馈
+- 支持自动读取 Windows 系统主题色动态生成配色（读取失败时回退至默认预设），同时内置 8 种预设方案
+- 配置自动保存在本地，刷新页面即可生效
 
-## Settings
-
-| Control | Values |
-| --- | --- |
-| Enable switch | on / off — off restores the previous look exactly |
-| Colour source | **Follow system** (Windows accent colour) / **Pick a colour** |
-| Preset | eight Material 3 seed colours, shown when "Pick a colour" is selected |
-
-The eight presets are `baseline` `#6750a4`, `blue` `#00639b`, `green` `#006e1c`,
-`teal` `#006a6a`, `orange` `#8e4e00`, `pink` `#984061`, `red` `#b3261e`,
-`blueGrey` `#525e7d`. All of them use `SchemeTonalSpot`.
-
-Preferences live in `localStorage` under `dsh.stars-material.enabled` / `.source` /
-`.preset`, so they survive a reload without restarting the harness. If the accent
-colour cannot be read, the theme retries four times and then falls back to the
-Material baseline palette rather than staying unthemed.
-
-## Repository layout
+## 目录结构
 
 ```
-plugin/                   what the profile installs
-  package.json            manifest (dsh.client, dsh.bundle.patch, files)
-  cordis.patch.yml        three-line patch that inserts the plugin
-  index.js                Host half: accent colour reader + /stars-material/palette
-  client.js               Client half: the five modules bundled into one file
-  icon.svg, locale/*.json icon and flat message catalogues (26 keys each)
-  lib/palette.js          palette engine, pre-concatenated for the Host
-  lib/mcu/**              vendored Material Color Utilities 0.4.0
-src/                      the actual sources
-  parts/palette-spec.js   role order, eight presets, harmony, bridge roles
-  parts/palette-engine.js seed → 45 roles, packing, WCAG contrast
-  parts/token-map.js      the eleven token tables
-  client/main.js          token map, theme layers, settings page, retry
-  client/stylesheet.js    rules the token registry cannot express
-  generated/palettes.js   build output: 8 schemes × 45 roles
-build/                    seven pipeline steps (generate-palettes, bundle-host,
-                          bundle-client, validate-coverage, validate-manifest,
-                          self-check, host-check), the verify.mjs driver, and
-                          helpers (vendor-mcu, vendor-survey, scan-css,
-                          attribute-colours.py, verify-scrim.py, palette dumps)
-vendor/                   upstream MCU source + product CSS from app.asar
+plugin/                   构建后的插件产物
+  package.json            插件清单（dsh.client、dsh.bundle.patch、files）
+  cordis.patch.yml        插件注入补丁配置
+  index.js                Host 端入口：读取系统主题色并提供调色板接口
+  client.js               Client 端入口：打包后的主题脚本
+  icon.svg, locale/*.json 插件图标与中/英多语言文案
+  lib/palette.js          供 Host 端使用的调色板生成引擎
+  lib/mcu/**              内置的 Material Color Utilities 0.4.0 依赖
+src/                      插件源码
+  parts/palette-spec.js   色彩角色顺序、预设定义及桥接角色配置
+  parts/palette-engine.js 种子色生成色彩角色、数据打包与对比度校验
+  parts/token-map.js      产品级样式变量映射表
+  client/main.js          变量应用、主题层管理、设置页面与重试逻辑
+  client/stylesheet.js    补充 CSS 样式规则（圆角、动效与状态覆盖）
+  generated/palettes.js   内置预设的预计算调色板数据
+build/                    构建与校验脚本
+vendor/                   上游依赖源码及宿主原始样式参考
 ```
 
-`plugin/`, `src/generated/palettes.js` and `plugin/lib/**` are committed on
-purpose: the harness installs this directory as a `link:` dependency and runs no
-build step of its own, so a clone has to be installable as-is. `node
-build/verify.mjs` regenerates all of them when the sources change.
+## 开发与构建
 
-## Development
+运行以下命令生成产物并执行校验：
 
-```pwsh
+```powershell
 node build/verify.mjs
 ```
 
-Seven steps, in order, stopping at the first failure. `all checks passed` at the
-end is the only acceptance signal.
+`plugin/client.js`、`plugin/lib/**` 与 `src/generated/palettes.js` 均为脚本自动生成的文件，请勿手动修改。
 
-| Step | What it proves |
-| --- | --- |
-| `generate palettes` | 8 presets × 45 roles, all contrast pairs above threshold |
-| `bundle host` | MCU vendored (13 entries) and `lib/palette.js` written |
-| `bundle client` | the 5 modules parse as one bundle |
-| `token coverage` | 155 product tokens covered, 0 missing, 0 invented |
-| `manifest` | 6 declared files resolve, en/zh aligned, no harness client requires |
-| `behaviour` | six scenarios, 118 assertions |
-| `host route` | exact route, origin bound, cache reuse, dispose |
+## 已知问题
 
-`plugin/` is generated: never edit `plugin/client.js` or `plugin/lib/**` by hand
-— the next `verify` run overwrites them.
+- 深色模式及部分浮层组件（菜单、对话框、提示框）在去除阴影后的视觉表现仍在持续完善中。
+- 受宿主原生控件结构与无边框样式限制，以下细节暂未完全对齐 Material 3 规范：
+  - 开关（Switch）组件尺寸与原生复选框（Checkbox）样式
+  - 部分按钮圆角及标签页（Tab）指示器样式
+  - 默认字体栈配置
+  - 两处 SVG 环形进度条轨道颜色
+  - 原生依赖边框实现的细微分割线在去边框后不再显示
 
-## Verification status
+## 开源协议
 
-Measured on the live light-mode window: **83.5 %** of pixels are exactly a
-Material 3 role colour, **0.29 %** are leftover stock harness colours, and no
-unattributed colour patch exceeds 1 %. Border-token pixels and soft-shadow pixels
-are both zero.
-
-Not verified, because desktop input to the harness window is refused in the
-environment this was built in: dark-mode appearance, live hover/pressed pixels, the
-settings page's final look, and menus/dialogs/toasts after elevation goes to
-`none`. The known deviations are switch size, native checkboxes, button radii, the
-tab indicator, the font stack, two SVG ring tracks, and the hairline separators
-that disappear with the border tokens.
-
-## Licence
-
-MIT for this plugin. `plugin/lib/mcu/**` and `vendor/material-color-utilities/**`
-are Apache-2.0 (Material Color Utilities).
+- 本项目代码基于 MIT 协议开源。
+- `plugin/lib/mcu/**` 与 `vendor/material-color-utilities/**` 遵循 Apache-2.0 协议（Material Color Utilities）。
