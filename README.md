@@ -63,6 +63,6 @@ node build/verify.mjs
 
 ## 开源协议
 
-- 本项目代码基于 MIT 协议开源，协议全文见 [LICENSE](LICENSE)。
-- `plugin/lib/mcu/**` 与 `vendor/material-color-utilities/**` 遵循 Apache-2.0 协议（Material Color Utilities），协议全文随源码一并保留。
-- `vendor/dsh-survey/**` 的四份样式表摘自 DeepSeek Harness，遵循 MIT 协议（Copyright (c) 2026 DeepSeek），协议全文见 [vendor/dsh-survey/LICENSE](vendor/dsh-survey/LICENSE)。
+- 本项目代码基于 MIT 协议开源
+- `plugin/lib/mcu/**` 与 `vendor/material-color-utilities/**` 遵循 Apache-2.0 协议（Material Color Utilities）
+- `vendor/dsh-survey/**` 的四份样式表摘自 DeepSeek Harness，遵循 MIT 协议（Copyright (c) 2026 DeepSeek）
