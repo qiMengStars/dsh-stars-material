@@ -1,17 +1,17 @@
 /**
- * `plugin/` 里那个 bundle 的 manifest 与打包检查。
+ * `plugin/` 中 bundle 的 manifest 与打包检查。
  *
- * 核对的是浏览器看不出来、用户装完之后才会发现的事：
+ * 校验浏览器无法识别、安装后才会显现的问题：
  *
- *   - `package.json` 声明了加载器需要的字段（`name`、`type`、`exports`、
+ *   - `package.json` 声明加载器所需字段（`name`、`type`、`exports`、
  *     `dsh.bundle.patch`、`dsh.client`），且运行时不依赖任何 Harness 客户端包；
- *   - 每个 `exports`/`files` 条目都指向包内真实存在的文件；
+ *   - 每个 `exports`/`files` 条目均指向包内实际存在的文件；
  *   - `cordis.patch.yml` 恰好插入一行，且名字与包名一致；
- *   - 两份 locale 文件都能解析，`meta.title` / `meta.description` 都按句首大写写，
+ *   - 两份 locale 文件均可解析，`meta.title` / `meta.description` 符合句首大写，
  *     且暴露同一套键；
- *   - 图标是带 `viewBox` 的合法 SVG，且远在体积上限之内；
- *   - Client bundle 只 `require` 白名单里的模块；
- *   - 项目声明或依赖的每一份 licence 文本都在磁盘上。
+ *   - 图标为带 `viewBox` 的合法 SVG，且体积未超上限；
+ *   - Client bundle 仅 `require` 白名单内的模块；
+ *   - 项目声明或依赖的每一份 licence 文本均存在于磁盘。
  *
  *   node build/validate-manifest.mjs
  */
@@ -91,7 +91,7 @@ for (const entry of pkg.files ?? []) targets.add(entry.replace(/^\.\//, ''));
 
 for (const target of targets) {
   if (target.includes('*')) continue;
-  check(await exists(resolve(PKG_DIR, target)), `package.json："${target}" 被列出，但包里没有这个文件`);
+  check(await exists(resolve(PKG_DIR, target)), `package.json："${target}" 已被列出，但包中不存在对应文件`);
 }
 
 for (const required of ['index.js', 'client.js', 'cordis.patch.yml', 'icon.svg', 'locale/en.json', 'locale/zh.json']) {
@@ -102,8 +102,8 @@ for (const required of ['index.js', 'client.js', 'cordis.patch.yml', 'icon.svg',
 // Licence
 // ---------------------------------------------------------------------------
 
-// `package.json` 声明 MIT，而 vendor 目录再分发 MIT 代码，所以两份声明都得有随文件一起
-// 走的 licence 文本兜底。插件包自己留一份，因为它是单独安装的，周围没有整个仓库。
+// `package.json` 声明 MIT，vendor 目录再分发 MIT 代码，因此两处声明都需要随文件提供
+// 对应的 licence 文本。插件包单独保留一份，因为其安装环境中没有整个仓库。
 check(pkg.license === 'MIT', `package.json：应当是 "license": "MIT"，实际为 ${JSON.stringify(pkg.license)}`);
 check(
   (pkg.files ?? []).some((entry) => entry.replace(/^\.\//, '') === 'LICENSE'),
@@ -141,7 +141,7 @@ if (await exists(patchPath)) {
     check(id === pkg.name, `cordis.patch.yml：id "${id}" 与包名不一致`);
     check(
       name === pkg.name || name === `'${pkg.name}'`,
-      `cordis.patch.yml：name "${name}" 解析不到这个包`,
+      `cordis.patch.yml：name "${name}" 与包名不匹配`,
     );
   }
 } else {
@@ -180,7 +180,7 @@ check(
   'zh.json：缺少 meta.description',
 );
 
-// 句首大写：不许每个词都大写，也不许末尾带句号。
+// 句首大写指仅首字母大写，其余词保持小写，且末尾不带句号。
 for (const [key, value] of Object.entries(enFlat)) {
   if (key === 'meta.title' || key === 'nav.title') {
     const words = value.split(' ').filter((word) => /^[A-Za-z]/.test(word));
@@ -236,13 +236,13 @@ if (await exists(clientPath)) {
   const unexpected = [...new Set(requires)].filter((id) => !ALLOWED_REQUIRES.has(id));
   check(unexpected.length === 0, `client.js require 了白名单之外的模块：${unexpected.join(', ')}`);
 
-  // 这个 bundle 是浏览器脚本：一句 ESM import/export 就会解析失败。
+  // 该 bundle 为浏览器脚本；一条 ESM import/export 语句就会导致解析失败。
   check(!/^\s*import\s[\s\S]*?from\s+["']/mu.test(client), 'client.js：出现了 ESM import 语句');
   check(!/^\s*export\s+(?:const|let|var|function|class|default)\b/mu.test(client), 'client.js：出现了 ESM export 语句');
 
-  // 硬编码颜色只有在跟不了主题的地方才允许：设置页里画的那 8 个种子色块，以及 token
-  // map 里的插画字面量。除此之外都意味着有一份配色被复制进了 bundle，那就不再跟随
-  // 当前配色方案了。
+  // 硬编码颜色仅在无法跟随主题的位置允许：设置页中的 8 个种子色块，以及 token
+  // map 中的插画字面量。其余情况意味着有一份配色被复制进 bundle，无法跟随当前
+  // 配色方案变化。
   const { PRESETS } = await import(pathToFileURL(resolve(REPO, 'src/parts/palette-spec.js')).href);
   const { LITERAL_TOKENS } = await import(pathToFileURL(resolve(REPO, 'src/parts/token-map.js')).href);
   const allowedHex = new Set([

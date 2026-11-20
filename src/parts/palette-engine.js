@@ -1,29 +1,28 @@
 /**
  * 构建脚本与 Host 端共用的配色引擎。
  *
- * 所有入口都由 `createPaletteEngine(mcu)` 生成：它把 Material Color Utilities 的
- * 模块对象作为参数收进来，而不是直接 import。这样同一份实现能被两个完全不同的加载
- * 器使用：
+ * 所有入口均由 `createPaletteEngine(mcu)` 生成：该函数接收 Material Color Utilities
+ * 的模块对象作为参数，而非直接 import。同一实现因此可用于两个不同的加载器：
  *
- *   - `build/generate-palettes.mjs` 直接传 vendored 目录。
- *   - `plugin/lib/palette.js` 由本文件加 `src/parts/palette-spec.js` 拼成，随包带上
- *     `plugin/lib/mcu/` 里的那份依赖。
+ *   - `build/generate-palettes.mjs` 直接传入 vendored 目录。
+ *   - `plugin/lib/palette.js` 由本文件与 `src/parts/palette-spec.js` 拼接而成，随包携带
+ *     `plugin/lib/mcu/` 中的依赖。
  *
- * 下面唯一的 import 是角色表，它在打包拼接时会被去掉（见 `build/bundle-client.mjs`
+ * 文件中唯一的 import 是角色表，打包拼接时会移除该声明（见 `build/bundle-client.mjs`
  * 与 `build/bundle-host.mjs`）。
  *
- * 每套配色都压成一个十六进制字符串：45 个角色 × 6 位，按 `ROLE_ORDER` 排列，去掉
- * 前面的 `#`。切字符串比每套配色带一个对象便宜，生成出来的文件也还看得懂。
+ * 每套配色压缩为一个十六进制字符串：45 个角色 × 6 位，按 `ROLE_ORDER` 排列，去掉
+ * 前缀 `#`。按字符串切片比按对象携带每套配色开销更低，生成的文件也仍可阅读。
  */
 
 import { FIXED_ROLE_ORDER, ROLE_ORDER } from './palette-spec.js';
 
-/** 角色名到它在压缩串里的槽位。 */
+/** 角色名到其在压缩串中槽位的映射。 */
 const ROLE_INDEX = new Map(
   [...ROLE_ORDER, 'surfaceTint', ...FIXED_ROLE_ORDER].map((role, index) => [role, index]),
 );
 
-/** 固定的色相让成功/警告色不随种子色漂移。 */
+/** 固定色相使成功色与警告色不随种子色漂移。 */
 const FIXED_PALETTES = {
   success: { hue: 145, chroma: 48 },
   warning: { hue: 75, chroma: 60 },
@@ -36,10 +35,10 @@ const FIXED_TONES = {
 };
 
 /**
- * 在一个 Material Color Utilities 模块对象上建引擎。
+ * 在一个 Material Color Utilities 模块对象上建立引擎。
  *
  * @param mcu vendored 的 `@material/material-color-utilities` 命名空间。
- * @returns 两半都需要的配色操作。
+ * @returns 两半共用的配色操作。
  */
 export function createPaletteEngine(mcu) {
   const {
@@ -84,22 +83,22 @@ export function createPaletteEngine(mcu) {
     return values;
   }
 
-  /** 一套方案的全部角色，已压缩。 */
+  /** 压缩一套方案的全部角色。 */
   function packScheme(scheme, isDark) {
     const values = [...schemeRoleValues(scheme), ...fixedRoleValues(isDark)];
     for (const value of values) {
       if (!/^#[0-9a-f]{6}$/u.test(value)) {
-        throw new Error('配色引擎：角色取值不对劲 "' + value + '"');
+        throw new Error('配色引擎：角色取值格式不正确 "' + value + '"');
       }
     }
     return values.map((hex) => hex.slice(1)).join('');
   }
 
   /**
-   * 用本插件唯一的调和方式推导种子色的明暗两套方案。
+   * 用本插件唯一的调和方式，从种子色推导明暗两套方案。
    *
-   * 色调斑点是 Material 3 的默认方案，所以一个预设得到的就是设计系统文档里那张
-   * 角色表，而不是它的近似值。
+   * tonal spot 是 Material 3 的默认方案，因此从一个预设得到的即是设计系统文档中的
+   * 角色表，而非近似值。
    */
   function paletteFromSeed(seedHex) {
     const source = Hct.fromInt(argbFromHex(seedHex));
@@ -125,7 +124,7 @@ export function createPaletteEngine(mcu) {
     return unpack(packed, role) + byte.toString(16).padStart(2, '0');
   }
 
-  /** 颜色的彩度，用来判断系统强调色是不是接近中性。 */
+  /** 颜色的彩度，用于判断系统强调色是否接近中性。 */
   function chromaOf(seedHex) {
     return Hct.fromInt(argbFromHex(seedHex)).chroma;
   }

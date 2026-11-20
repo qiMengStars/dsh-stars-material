@@ -1,20 +1,13 @@
 /**
- * 打包发出去的 Client 半边。
+ * 打包发布用的 Client 端脚本。
  *
- * Harness 通过 `window.__ModuleLoader__.load({ id, factory })` 加载插件的浏览器产物，
- * factory 拿到的 `require` 是 CommonJS 形状，但只解析宿主暴露的运行时模块（`react`），
- * 不解析相对路径；打包文件也没有 ESM 流水线可走。所以 `plugin/client.js` 必须是一个
- * 自包含的单一脚本。
+ * Harness 通过 `window.__ModuleLoader__.load({ id, factory })` 加载浏览器产物。
+ * factory 收到的 `require` 只能解析宿主暴露的模块（`react`），不解析相对路径，
+ * 产物也不走 ESM 加载流程。因此 `plugin/client.js` 必须是一个自包含脚本。
  *
- * 这个脚本把 `src/` 下的普通 ESM 源码拼成那一个文件。转换刻意做得很笨、很好核对：
- *
- *   - 丢掉 `import ... from '...';`（顺序改由下面的 MODULES 手工指定，且各模块之间
- *     名字不重复）；
- *   - 去掉声明行开头的 `export `；
- *   - 其余原样抄过去。
- *
- * `src/client/main.js` 是最后一个模块：它定义 `applyClient(ctx)`，下面的包装把它交给
- * 加载器。
+ * 本脚本按 MODULES 的顺序拼接 `src/` 下的 ESM 源码：移除 import 声明和 export
+ * 关键字，其余内容原样保留。`src/client/main.js` 排在最后，提供 applyClient(ctx)，
+ * 由文件末尾的包装交给加载器。
  *
  *   node build/bundle-client.mjs
  */
@@ -28,7 +21,7 @@ const REPO = resolve(HERE, '..');
 const OUT_DIR = resolve(REPO, 'plugin');
 const OUT_FILE = resolve(OUT_DIR, 'client.js');
 
-/** 顺序有讲究：后面的模块会读前面声明过的名字。 */
+/** 拼接顺序即模块依赖顺序，被依赖的模块排在前。 */
 const MODULES = [
   'src/generated/palettes.js',
   'src/parts/palette-spec.js',
@@ -53,8 +46,7 @@ function stripModule(source, path) {
       if (line.includes(';')) skippingImport = false;
       continue;
     }
-    // 本仓库只写单行 import。这个判断是为了：真出现跨行 import 时立刻报错，而不是让
-    // `import` 悄悄漏进产物里，那会在加载时报语法错误。
+    // 本仓库只用单行 import；出现跨行写法时报错，避免未剥离的 import 进入产物。
     if (IMPORT_LINE.test(line)) {
       if (!line.includes(';')) skippingImport = true;
       continue;
@@ -102,7 +94,7 @@ ${parts.join('\n\n')}
 await mkdir(OUT_DIR, { recursive: true });
 await writeFile(OUT_FILE, wrapper, 'utf8');
 
-// 宁可构建失败，也别发出一个浏览器解析不了的脚本。
+// 生成后先做语法校验，确保产物能被浏览器解析。
 try {
   // eslint-disable-next-line no-new-func
   new Function(wrapper);

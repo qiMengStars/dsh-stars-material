@@ -1,14 +1,14 @@
 /**
  * Material 3 主题包的 Host 半边。
  *
- * 所有渲染都在 Client 模块（client.js）里，由加载器挂到 Web UI 上。这一半只负责
- * 浏览器做不到的一件事：读操作系统的强调色。
+ * 渲染逻辑位于 Client 模块（client.js），由加载器挂到 Web UI。Host 半边只处理
+ * 浏览器无法完成的操作：读取操作系统强调色并推导配色。
  *
- * Client 会在加载时问一次，用户切到"跟随系统"时再问。答复是强调色，加上由它推导
- * 出的明暗两套完整 Material 3 角色，于是浏览器里不用跑色彩库。
+ * Client 在加载时和切换到"跟随系统"时各请求一次。响应包含强调色，以及由该色
+ * 推导的明暗两套 Material 3 角色，浏览器无需引入色彩库。
  *
- * 这里处处可降级：服务缺失、子进程被拦、注册表键不存在、值解析不出来，一律以
- * `{ ok: false, reason }` 收场，Client 退回预设配色。
+ * 服务缺失、子进程被拦截、注册表键不存在或取值解析失败时，返回
+ * `{ ok: false, reason }`，由 Client 回退到预设配色。
  */
 
 import { execFile } from 'node:child_process';
@@ -17,26 +17,25 @@ import { resolve } from 'node:path';
 
 import { createPaletteEngine, mcu } from './lib/palette.js';
 
-/** 硬依赖：没有 web server 就没法回应 Client。 */
+/** 注册配色路由所依赖的服务。 */
 export const inject = ['webServer'];
 
 const ROUTE = '/stars-material/palette';
 
-/** 强调色是用户设置，每敲一次键就重读一遍是浪费。 */
+/** 强调色缓存时长（毫秒）。 */
 const CACHE_MS = 30_000;
 
-/** 彩度低于这个值就是灰的，也就是没选过强调色。 */
+/** 判定强调色有效的彩度下限；低于该值视为未设置强调色。 */
 const MIN_CHROMA = 5;
 
 /**
- * 有 Electron 时不用起子进程就能拿到强调色。
+ * 通过 Electron 主进程读取强调色，避免创建子进程。
  *
- * `reg.exe` 是可移植的路子，但每次刷新都要起一个进程，有些沙箱还直接拦掉。
- * `systemPreferences` 给的是操作系统报告的同一個值，直接从主进程拿，所以先试它，
- * `reg.exe` 退为后备。
+ * reg.exe 需要为每个请求创建进程，部分沙箱会拦截；systemPreferences 返回的
+ * 是同一个系统值，优先使用，reg.exe 作为后备。
  *
- * `electron` 不是本包的依赖：它由加载本包的 harness 进程解析，单跑 `node` 就是
- * 找不到。
+ * electron 由加载本包的 Harness 进程解析，并非本包的依赖；单独的 node 进程
+ * 中无法解析。
  */
 let systemPreferencesCache;
 function loadSystemPreferences() {
@@ -48,16 +47,16 @@ function loadSystemPreferences() {
     const preferences = electron?.systemPreferences;
     if (typeof preferences?.getAccentColor === 'function') systemPreferencesCache = preferences;
   } catch {
-    // 不在 Electron 里，或者沙箱把模块挡住了。
+    // 当前进程未提供 electron 模块，或模块加载被拦截。
   }
   return systemPreferencesCache;
 }
 
 /**
- * 系统强调色，`#rrggbb`；Electron 答不上来就是 `null`。
+ * 读取系统强调色，返回 `#rrggbb`；无法读取时返回 null。
  *
- * Electron 的文档说 `getAccentColor()` 返回 `#RRGGBBAA`，所以前六位是颜色，后两位
- * 是 alpha——Material 3 用不上那两位。
+ * Electron 的 getAccentColor() 返回 `#RRGGBBAA`，前六位为颜色值，末两位为
+ * alpha 通道，Material 3 配色不使用 alpha。
  *
  * @see https://www.electronjs.org/docs/latest/api/system-preferences#systempreferencesgetaccentcolor
  */
@@ -65,8 +64,7 @@ function accentFromElectron() {
   const preferences = loadSystemPreferences();
   if (preferences === null) return null;
   try {
-    // Windows 和 macOS 上 Electron 都返回 `#RRGGBBAA`；个别构建会去掉 alpha，所以
-    // 两种长度都接受。
+    // Electron 通常返回 `#RRGGBBAA`；部分构建省略 alpha，两种长度均接受。
     const value = preferences.getAccentColor();
     if (typeof value !== 'string') return null;
     const digits = value.replace(/^#/u, '');
@@ -78,10 +76,10 @@ function accentFromElectron() {
 }
 
 /**
- * 判断请求是不是本 harness 发出的页面发来的。
+ * 判断请求是否来自本 Harness 提供的页面。
  *
- * `getOrigin()` 在监听端口绑定之前会抛错，所以按需读取；取不到时退化为拿请求自己
- * 的 Host 和 `Origin` 头相比——同样是防 DNS 重绑，只是只靠请求本身算。
+ * getOrigin() 在端口绑定前会抛错，因此按需读取；读取失败时改为比对请求自身的
+ * Host 与 Origin 头。
  */
 function isSameOrigin(request, readOrigin) {
   const host = request.headers.host;
@@ -109,11 +107,11 @@ function isSameOrigin(request, readOrigin) {
   try {
     localHosts.push(`localhost:${new URL(origin).port}`);
   } catch {
-    // origin 解析不出来时，就只剩精确比对 Host 这一条路。
+    // origin 无法解析时，仅按 Host 精确比对。
   }
 
-  // Host 检查就是防 DNS 重绑的。别的站点发来的页面照样能带着匹配的 `Host` 打到
-  // 环回端口，所以只要带了 `Origin`，它也必须是本 harness。
+  // Origin 头用于抵御 DNS 重绑：外部站点的请求可能携带匹配的 Host，但其 Origin
+  // 与本 Harness 不同。
   const originHeader = request.headers.origin;
   if (typeof originHeader === 'string') {
     let sender;
@@ -128,7 +126,7 @@ function isSameOrigin(request, readOrigin) {
   return localHosts.includes(host);
 }
 
-/** 对某个值跑一次 `reg query`，返回它的 DWORD，取不到就是 `null`。 */
+/** 查询注册表项的 DWORD 值；查询失败返回 null。 */
 function queryRegistry(key, value) {
   return new Promise((resolvePromise) => {
     const systemRoot = process.env.SystemRoot ?? 'C:\\Windows';
@@ -146,13 +144,11 @@ function queryRegistry(key, value) {
 }
 
 /**
- * DWM 写这两个值时用的字节序不一样，两种都真实存在于机器上：
+ * 解析 AccentColor 的 ABGR 字节序，转换为 `#rrggbb`。
  *
- *   - `ColorizationColor` 是 `0xAARRGGBB`。
- *   - `AccentColor` 是 `0xAABBGGRR`——同一个值，红蓝对调。
- *
- * Windows 设置里显示的是 `AccentColor`，所以以它为准，另一个只用来交叉核对。两个
- * 都读，才不会在某些机器上取到反色，也正因为如此谁都不能单独采信。
+ * DWM 写入的两个值字节序不同：ColorizationColor 为 0xAARRGGBB，AccentColor
+ * 为 0xAABBGGRR。Windows 设置界面显示的是 AccentColor，因此以它为准，
+ * ColorizationColor 仅用于交叉核对；两值都读取可避免取到反色。
  */
 function seedFromDword(dword) {
   const red = dword & 0xff;
@@ -166,7 +162,7 @@ function seedFromDword(dword) {
   );
 }
 
-/** `0xAARRGGBB` 转 `#rrggbb`。 */
+/** 将 ColorizationColor 的 ARGB 值转换为 `#rrggbb`。 */
 function seedFromArgbDword(dword) {
   const blue = dword & 0xff;
   const green = (dword >> 8) & 0xff;
@@ -179,7 +175,7 @@ function seedFromArgbDword(dword) {
   );
 }
 
-/** Windows 是不是深色模式，用来给 Client 一个提示。 */
+/** 读取 Windows 的深色模式设置，作为提供给 Client 的提示。 */
 async function readAppsUseLightTheme() {
   const value = await queryRegistry(
     'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize',
@@ -189,17 +185,17 @@ async function readAppsUseLightTheme() {
 }
 
 /**
- * 读系统强调色，并推导出配色。
+ * 读取系统强调色并推导配色。
  *
- * @returns `{ ok: true, seed, light, dark, appsUseLightTheme }` 或
- *   `{ ok: false, reason }`。不会抛错。
+ * @returns `{ ok: true, seed, light, dark, appsUseLightTheme }`，或
+ *   `{ ok: false, reason }`；不抛错。
  */
 async function readSystemPalette(engine) {
   if (process.platform !== 'win32') {
-    return { ok: false, reason: 'system accent colour is only read on Windows' };
+    return { ok: false, reason: '系统强调色仅在 Windows 上读取' };
   }
 
-  // 快路：不起子进程，也不解析注册表。
+  // 优先使用 Electron，避免创建进程和读取注册表。
   const electronSeed = accentFromElectron();
   if (electronSeed !== null && engine.chromaOf(electronSeed) >= MIN_CHROMA) {
     const palette = engine.paletteFromSeed(electronSeed);
@@ -219,19 +215,18 @@ async function readSystemPalette(engine) {
   );
 
   if (accentDword === null && colorizationDword === null) {
-    return { ok: false, reason: 'the accent colour registry values could not be read' };
+    return { ok: false, reason: '无法读取强调色的注册表值' };
   }
 
   const accentSeed = accentDword === null ? null : seedFromDword(accentDword);
   const colorizationSeed =
     colorizationDword === null ? null : seedFromArgbDword(colorizationDword);
 
-  // 灰色强调色意味着"自动取色没开"；Material 3 从里面提不出色相，返回基准配色才是
-  // 诚实的答案。
+  // 中性色不含色相，无法据此生成 Material 3 配色。
   const candidates = [accentSeed, colorizationSeed].filter((seed) => seed !== null);
   const usable = candidates.find((seed) => engine.chromaOf(seed) >= MIN_CHROMA);
   if (usable === undefined) {
-    return { ok: false, reason: 'the Windows accent colour is neutral, so no hue can be derived' };
+    return { ok: false, reason: '强调色为中性色，无法推导出色相' };
   }
 
   const palette = engine.paletteFromSeed(usable);
@@ -249,8 +244,7 @@ async function readSystemPalette(engine) {
 /**
  * 注册配色路由。
  *
- * `apply` 是加载器调用的入口。它建的东西都包在 `ctx.effect` 里，卸载本包时路由会
- * 跟着一起撤掉。
+ * apply 为加载器调用的入口；创建的资源均由 ctx.effect 管理，卸载本包时一并释放。
  */
 export function apply(ctx) {
   const engine = createPaletteEngine(mcu);
@@ -259,7 +253,7 @@ export function apply(ctx) {
   let cachedAt = 0;
   let inFlight = null;
 
-  /** 每 {@link CACHE_MS} 答一次，并发调用共用同一次读取。 */
+  /** 缓存有效期为 CACHE_MS；并发请求共用同一次读取。 */
   const answer = async () => {
     const now = Date.now();
     if (cached !== null && now - cachedAt < CACHE_MS) return cached;
@@ -291,10 +285,10 @@ export function apply(ctx) {
         const payload = await answer();
         response.statusCode = 200;
         response.setHeader('content-type', 'application/json; charset=utf-8');
-        // 配色跟着用户设置走，缓存留久了就是错的。
+        // 强调色可能随系统设置改变，禁用客户端缓存。
         response.setHeader('cache-control', 'no-store');
         response.end(JSON.stringify(payload));
       },
     });
-  }, 'material 3 palette route');
+  }, 'Material 3 配色路由');
 }

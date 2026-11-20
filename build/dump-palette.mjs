@@ -1,8 +1,9 @@
-// 把截图归属需要的「角色 → 十六进制」表直接写到磁盘。
+// 将「角色 → 十六进制」配色表写入临时目录，供截图归属工具读取。
 //
-// 这个沙箱里 pwsh 没法给 node 加重定向或管道，所以表由 node 自己写文件。
+// 明暗两套方案分别写入 %TEMP%/m3-live-light.txt 与 %TEMP%/m3-live-dark.txt，
+// 文件路径输出到标准输出。种子色取命令行参数，缺省时使用 DEFAULT_PRESET。
 //
-//   node build/dump-palette.mjs '#6750a4'      -> %TEMP%/m3-live-light.txt、-dark.txt
+//   node build/dump-palette.mjs '#6750a4'
 import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';

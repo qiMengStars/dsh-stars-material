@@ -1,16 +1,17 @@
 /**
- * 由 build/generate-palettes.mjs 生成，不要手改。
+ * 由 build/generate-palettes.mjs 生成，请勿手动修改。
  *
- * 每套配色就是一条十六进制字符串：45 个角色 × 6 位，按 ROLES 顺序排，去掉每项开头
- * 的 "#"。取值时按角色切一段，所以发出去的 Client 半边不需要色彩库。要重新生成就跑：
+ * 每套配色编码为一条十六进制字符串，包含 45 个角色 × 6 位，按 ROLES 顺序排列，
+ * 并去掉每个颜色值开头的 "#"。取值时按角色截取对应片段，因此 Client 端无需携带色彩库。
+ * 重新生成时执行：
  *
  *   node build/generate-palettes.mjs
  *
- * `PRESET_TABLE` 按预设 id 索引，明暗两套都在里面。预设清单（id、种子色、显示名）
- * 放在 `src/parts/palette-spec.js`，这样设置页和这份产物不会在"有哪些预设"上打架。
+ * `PRESET_TABLE` 按预设 id 索引，包含明暗两套配色。预设清单（id、种子色、显示名）
+ * 定义在 `src/parts/palette-spec.js`，设置页与本产物共用该定义，避免预设集合不一致。
  *
- * 内容是 8 个 Material 3 预设 × 2 套方案 = 16 套配色、每套 45 个角色，
- * 全部由单一的 "tonalSpot"（SchemeTonalSpot）调和方式推导。
+ * 共包含 8 个 Material 3 预设 × 2 套方案 = 16 套配色，每套 45 个角色，
+ * 全部由单一 "tonalSpot"（SchemeTonalSpot）调和方式推导。
  */
 
 export const ROLES = ["primary","onPrimary","primaryContainer","onPrimaryContainer","secondary","onSecondary","secondaryContainer","onSecondaryContainer","tertiary","onTertiary","tertiaryContainer","onTertiaryContainer","error","onError","errorContainer","onErrorContainer","background","onBackground","surface","onSurface","surfaceVariant","onSurfaceVariant","outline","outlineVariant","shadow","scrim","inverseSurface","inverseOnSurface","inversePrimary","surfaceDim","surfaceBright","surfaceContainerLowest","surfaceContainerLow","surfaceContainer","surfaceContainerHigh","surfaceContainerHighest","surfaceTint","success","onSuccess","successContainer","onSuccessContainer","warning","onWarning","warningContainer","onWarningContainer"];

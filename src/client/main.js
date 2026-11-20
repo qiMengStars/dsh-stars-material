@@ -1,26 +1,26 @@
 /**
  * 主题包的 Client 半边。
  *
- * 按运行顺序，它做了这些事：
+ * applyClient(ctx) 依次完成下列操作：
  *
- *   1. 读出存档的偏好（是否启用 / 取色来源 / 预设）。
- *   2. 为当前取色来源解析配色。手动模式直接切构建期那张预设表；自动模式向 Host
- *      半边要操作系统强调色以及由它推导的配色，于是浏览器里不用跑任何色彩库。
- *   3. 从这份配色推导出一张扁平的 `Record<token, { light, dark }>`——纯函数，不碰
- *      DOM、不看时钟、不用随机数。
- *   4. 装上几层：
- *        a. `theme.overrideTokens(source, tokens)`——逐令牌换色。层是按令牌叠在当
- *           前主题之上的，所以它既盖得住内置配色，也不用和第三方主题争偏好。
- *        b. `theme.register()` 注册 `stars-material-light` / `stars-material-dark`——
- *           让主题出现在 `getTheme().themes` 里，能像别的主题一样被 `setTheme` 选中。
- *        c. `:root` 上的 `--dsh-m3-*` 桥接属性，样式表就能按角色取色而不必再抄一遍
+ *   1. 读取存档中的偏好（是否启用、取色来源、预设）。
+ *   2. 解析当前取色来源的配色。手动模式直接切换构建期生成的预设表；自动模式向
+ *      Host 半边请求操作系统强调色及由其推导的配色，浏览器内无需运行色彩库。
+ *   3. 由该配色推导出扁平的 `Record<token, { light, dark }>`。该过程为纯函数，
+ *      不访问 DOM、系统时钟或随机数。
+ *   4. 安装以下几层：
+ *        a. `theme.overrideTokens(source, tokens)` 按令牌逐项换色。覆盖层按令牌叠加
+ *           在当前主题之上，既能覆盖内置配色，也不与第三方主题争用偏好。
+ *        b. `theme.register()` 注册 `stars-material-light` / `stars-material-dark`，
+ *           使主题出现在 `getTheme().themes` 中，可被 `setTheme` 选中。
+ *        c. `:root` 上的 `--dsh-m3-*` 桥接属性，使样式表按角色取色，无需重复定义
  *           配色。
- *   5. 注入一个 `<style>`，装令牌注册表表达不了的东西：形状刻度、缓动曲线、原本
- *      由边框色提供的颜料，以及 Material 3 不画的描边。
- *   6. 提供一个设置页。
+ *   5. 注入一个 `<style>`，承载令牌注册表无法表达的内容：形状刻度、缓动曲线、
+ *      原由边框色提供的颜料，以及 Material 3 不绘制的描边。
+ *   6. 提供设置页。
  *
- * Client 包不能 `require` Harness 的客户端包，所以运行时只 import React，下面每个
- * 控件都是普通元素，靠宿主已经发布的 `--dsw-alias-*` 令牌上样式。
+ * Client 包不能 `require` Harness 的客户端包，运行时仅 import React。各控件均为
+ * 普通元素，样式依赖宿主已发布的 `--dsw-alias-*` 令牌。
  */
 
 const NS = 'dsh-stars-material';
@@ -35,14 +35,14 @@ const STORAGE_SOURCE = STORAGE_PREFIX + 'source';
 const STORAGE_PRESET = STORAGE_PREFIX + 'preset';
 
 /**
- * 插件改名成 `dsh-stars-material` 之前写下的键。
+ * 插件改名为 `dsh-stars-material` 之前写入的键。
  *
- * 这些键只读、不再写：已经存过偏好的 profile 跨过改名仍然保留，第一次改动才把值
- * 抄到新键上。没有这段，一次改名就会悄悄清掉所有人的设置。
+ * 这些键只读、不再写入：已存过偏好的 profile 跨过改名后仍保留设置，首次修改时才
+ * 将值迁移到新键。缺少该迁移会使改名清除既有设置。
  */
 const LEGACY_PREFIX = 'dsh.material-3.';
 
-/** `system` 跟随系统强调色；`preset` 固定用某一个 Material 3 种子色。 */
+/** `system` 表示跟随系统强调色；`preset` 表示固定使用某个 Material 3 种子色。 */
 const SOURCE_SYSTEM = 'system';
 const SOURCE_PRESET = 'preset';
 
@@ -51,10 +51,10 @@ const SETTINGS_SECTION_ORDER = 26;
 
 const STYLE_TAG_ID = NS + '/stars-material.css';
 
-/** Host 路由：返回系统强调色和由它推导的配色。 */
+/** Host 路由：返回系统强调色及由其推导的配色。 */
 const HOST_PALETTE_ROUTE = '/stars-material/palette';
 
-/** 一次 Host 往返到这时还没答复，就不值得再等了。 */
+/** Host 往返超过该时长仍未答复时停止等待。 */
 const HOST_TIMEOUT_MS = 1500;
 
 /** 追问强调色的重试时刻表，单位毫秒。 */
@@ -63,7 +63,7 @@ const HOST_RETRY_MS = [0, 2000, 6000, 15000];
 const ROLE_INDEX = new Map(ROLES.map((role, index) => [role, index]));
 const PRESET_INDEX = new Map(PRESETS.map((preset) => [preset.id, preset]));
 
-/** 从压缩的配色串里取一个角色的 `#rrggbb`。 */
+/** 从压缩的配色串里解析一个角色的 `#rrggbb`。 */
 function unpackRole(packed, role) {
   const index = ROLE_INDEX.get(role);
   if (index === undefined) {
@@ -73,7 +73,7 @@ function unpackRole(packed, role) {
   return '#' + packed.slice(start, start + 6);
 }
 
-/** 从压缩的配色串里取一个角色的 `#rrggbbaa`。 */
+/** 从压缩的配色串里解析一个角色的 `#rrggbbaa`。 */
 function unpackRoleAlpha(packed, role, alpha) {
   const byte = Math.round(Math.min(Math.max(alpha, 0), 1) * 255);
   return unpackRole(packed, role) + byte.toString(16).padStart(2, '0');
@@ -93,21 +93,21 @@ function presetPalette(preset) {
 }
 
 /**
- * 表里每个值要么是字面量，要么是对两个字面量的 `color-mix()`，所以派生色由浏览器
- * 自己算，发出去的脚本仍然不需要色彩库。
+ * 表中每个值要么是字面量，要么是两个字面量的 `color-mix()`，派生色由浏览器计算，
+ * 发布的脚本无需包含色彩库。
  */
 function mixExpression(first, into, weight) {
   return 'color-mix(in srgb, ' + first + ' ' + weight + '%, ' + into + ')';
 }
 
 /**
- * 为一份配色建出完整的令牌表。
+ * 为一份配色生成完整的令牌表。
  *
- * 纯数据：同样的输入永远得到同样的表，所以每次偏好变化都可以重调
+ * 结果为纯数据：相同输入始终得到相同的表，偏好每次变化都可重新调用
  * `overrideTokens`。
  *
- * `palette` 是 `{ light, dark }`，各是一条压缩过的角色串。预设表和 Host 的答复都
- * 是这个形状，所以这里不关心配色是从哪来的。
+ * `palette` 是 `{ light, dark }`，各为一条压缩的角色串。预设表与 Host 答复均为
+ * 该形状，解析过程不区分配色的来源。
  */
 function buildTokenMap(palette) {
   const light = palette.light;
@@ -126,7 +126,7 @@ function buildTokenMap(palette) {
 
   for (const [name, value] of Object.entries(LITERAL_TOKENS)) put(name, value, value);
 
-  // 去掉的描边和去掉的阴影都是"这里不许画出任何东西"。
+  // 被清除的描边与阴影都表示不绘制任何内容。
   for (const name of CLEARED_TOKENS) put(name, 'transparent', 'transparent');
 
   for (const [name, spec] of Object.entries(STATE_LAYER_TOKENS)) {
@@ -175,19 +175,19 @@ function buildTokenMap(palette) {
     );
   }
 
-  // 高程组合值会画一道 0.5dp 描边加两层极淡光晕。Material 3 只靠色调表达高程，
-  // 所以这七个全部解析成空。
+  // 高程组合值包含一道 0.5dp 描边和两层极淡光晕。Material 3 仅靠色调表达高程，
+  // 因此这七个名称全部解析为 none。
   for (const name of ELEVATION_TOKENS) put(name, 'none', 'none');
 
   return tokens;
 }
 
 /**
- * 给样式表用的桥。
+ * 给样式表使用的桥。
  *
- * 样式表调不到 `unpackRole`，所以每个要过桥的角色都把解析好的值发布成自定义属性。
- * 明暗两套都靠 `light-dark()` 塞进去——这是 CSS 里唯一能把双方案的值装进单个属性
- * 的写法。
+ * 样式表无法调用 `unpackRole`，因此每个需要过桥的角色都把解析结果发布为自定义
+ * 属性。明暗两套值均通过 `light-dark()` 写入，这是 CSS 中唯一能把两个方案的值
+ * 装入单个属性的写法。
  */
 function buildBridgeTokens(palette) {
   const out = {};
@@ -202,7 +202,7 @@ function buildBridgeTokens(palette) {
   return out;
 }
 
-/** `theme.register()` 能带的那部分：只含产品令牌、只含当前方案。 */
+/** `theme.register()` 可接受的部分：仅含产品令牌，且只含当前方案。 */
 function productTokens(tokens, colorScheme) {
   const out = {};
   for (const [name, modes] of Object.entries(tokens)) {
@@ -225,11 +225,11 @@ function readStorage(key, fallback) {
 }
 
 /**
- * 读一项偏好，读不到就退回改名前的键。
+ * 读取一项偏好，未命中时回退到改名前的键。
  *
- * @param {string} key 现在的键
- * @param {string} legacy 旧前缀下的同一个键
- * @param {string} fallback 两个键都没设时用的值
+ * @param {string} key 当前的键
+ * @param {string} legacy 旧前缀下的同名键
+ * @param {string} fallback 两个键均未设置时采用的值
  */
 function readPreference(key, legacy, fallback) {
   const current = readStorage(key, null);
@@ -241,7 +241,7 @@ function writeStorage(key, value) {
   try {
     window.localStorage.setItem(key, value);
   } catch {
-    // 存储被关掉的 profile 只在内存里保留这次选择。
+    // 存储被禁用的 profile 仅在内存中保留本次选择。
   }
 }
 
@@ -260,10 +260,11 @@ function readPreferences() {
 // ---------------------------------------------------------------------------
 
 /**
- * 向 Host 半边要操作系统强调色。
+ * 向 Host 半边请求操作系统强调色。
  *
- * 这件事归 Host：读注册表要起子进程，还要一个色彩库，两样都不该进浏览器包。失败是
- * 正常的（没设强调色、不是 Windows、子进程被拦），代价只是配色退回预设。
+ * 该操作由 Host 承担：读取注册表需要启动子进程并依赖色彩库，两者都不应进入浏览器
+ * 包。请求失败属于正常情况（未设置强调色、非 Windows、子进程被拦截），代价仅是
+ * 配色回退到预设。
  */
 async function fetchSystemPalette() {
   const controller = new AbortController();
@@ -376,11 +377,12 @@ const SETTINGS_STYLE = `
 /**
  * 插入（或刷新）本包的样式表。
  *
- * 加载器给每个包发了 `styles` builtin 就是干这个的。它缺失时（老版本宿主）按文档
- * 退回 `<head>` 里的一个 `<style>` 元素——不碰 `document.body`，也不插第二个标签。
+ * 加载器为每个包提供 `styles` builtin 用于此操作。该 builtin 缺失时（旧版本宿主）
+ * 回退到 `<head>` 中的一个 `<style>` 元素：不修改 `document.body`，不插入第二个
+ * 标签。
  *
- * 设置页的规则一直在；主题规则（形状刻度、缓动曲线、去描边、桥接变量的使用方）只在
- * 主题开启时写进去，所以关掉它是真的恢复原样。
+ * 设置页规则始终存在；主题规则（形状刻度、缓动曲线、描边清除、桥接变量的使用方）
+ * 仅在主题开启时写入，因此关闭主题可恢复原样。
  */
 function installStyles() {
   const selector = 'style[data-plugin-css=' + JSON.stringify(STYLE_TAG_ID) + ']';
@@ -519,10 +521,10 @@ function Material3SettingsPage(props) {
 }
 
 /**
- * 取色来源标题下面那行说明。
+ * 取色来源标题下方的说明。
  *
- * 自动模式有三种值得分开说的情况：读到了系统颜色；读到了但配色推不出来；系统颜色压
- * 根拿不到。说清是哪一种，能省掉"我的主题怎么是紫的"这类疑问。
+ * 自动模式需要区分三种情况：已读取系统颜色；已读取但无法推导配色；系统颜色不可用。
+ * 区分后可避免对最终配色来源产生歧义。
  */
 function describeSystem(state, t) {
   if (state.systemSeed === null || state.systemSeed === undefined) return t('page.systemUnavailable');
@@ -534,10 +536,10 @@ function describeSystem(state, t) {
 // ---------------------------------------------------------------------------
 
 /**
- * 为一份已经解析好的配色装上全部主题层。
+ * 为一份已解析的配色安装全部主题层。
  *
- * 返回的清理函数只移除这次调用加的东西。`register()` 不接受重复 id，所以换配色时
- * 必须先清理再注册——这也是为什么碰注册表的只有这一处。
+ * 返回的清理函数仅移除本次调用添加的层。`register()` 不接受重复 id，因此更换配色
+ * 时必须先清理再注册，这也是注册表操作集中于单个位置的原因。
  */
 function createThemeLayers(theme, enabled, palette) {
   if (!enabled) {
@@ -552,7 +554,7 @@ function createThemeLayers(theme, enabled, palette) {
     disposers.push(theme.overrideTokens(SOURCE, tokens));
   }
 
-  // 桥接属性走同一套覆盖机制，所以它们和令牌层一样被移除、被重新叠加。
+  // 桥接属性使用同一套覆盖机制，随令牌层一同移除、重新叠加。
   if (typeof theme.overrideTokens === 'function') {
     const pairs = {};
     for (const [name, value] of Object.entries(bridge)) {
@@ -572,7 +574,7 @@ function createThemeLayers(theme, enabled, palette) {
           theme.register({ id, colorScheme, tokens: productTokens(tokens, colorScheme) }),
         );
       } catch (error) {
-        // 上一次运行残留的注册不是致命的：真正给界面上色的是覆盖层。
+        // 上次运行遗留的注册不是致命错误：界面配色由覆盖层提供。
         console.error('Material 3 主题：注册 ' + id + ' 失败', error);
       }
     }
@@ -624,8 +626,8 @@ function applyClient(ctx) {
     revision: 0,
   };
 
-  /** 此刻正在用的配色。预设模式一开始就知道；自动模式先拿基准配色，让首帧就已经
-   *  上了主题，等 Host 答复再换掉。 */
+  /** 当前使用的配色。预设模式可直接确定；自动模式先采用基准配色使首帧即应用主题，
+   *  Host 答复到达后再替换。 */
   let resolved = preference.source === SOURCE_PRESET
     ? presetPalette(preference.preset)
     : presetPalette(DEFAULT_PRESET);
@@ -636,7 +638,7 @@ function applyClient(ctx) {
   }, NS + ' stylesheet');
   styles.apply(preference.enabled);
 
-  /** 此刻生效的主题层；每次换配色都整套替换。 */
+  /** 当前生效的主题层；每次更换配色时整套替换。 */
   let layers = { dispose() {} };
 
   ctx.effect(() => {
@@ -653,7 +655,7 @@ function applyClient(ctx) {
     published.revision += 1;
   };
 
-  /** 按当前偏好重新装一遍所有层。 */
+  /** 按当前偏好重新安装所有层。 */
   const install = () => {
     layers.dispose();
     layers = createThemeLayers(theme, preference.enabled && resolved !== null, resolved);
@@ -661,7 +663,7 @@ function applyClient(ctx) {
     publish();
   };
 
-  /** 正在等待的那次重试的句柄，好让换配色时能取消它。 */
+  /** 正在等待的重试句柄，用于在更换配色时取消。 */
   let retryTimer = null;
 
   const cancelRetry = () => {
@@ -672,11 +674,11 @@ function applyClient(ctx) {
   };
 
   /**
-   * 向 Host 要强调色配色，失败就重试几次。
+   * 向 Host 请求强调色配色，失败时按退避节奏重试。
    *
-   * Host 路由是在 Host 半边加载时才注册的，而页面可能比它先就绪——首次启动慢，或者
-   * 刷新后新的 Client 撞上上一代 Host。一次失败不该让整个会话都固定在基准配色上，
-   * 所以在认可回退之前，会按一个短的退避节奏再问几次。
+   * Host 路由在 Host 半边加载时注册，页面可能先于其就绪：首次启动较慢，或刷新后
+   * 新 Client 遇上旧 Host。单次失败不应使整个会话固定在基准配色上，因此在认定回退
+   * 之前按较短的退避间隔重试若干次。
    */
   const resolveSystem = async (attempt) => {
     retryTimer = null;
@@ -694,8 +696,8 @@ function applyClient(ctx) {
         }, HOST_RETRY_MS[next]);
         return;
       }
-      // 回退之后主题照样能用：Material 基准配色本身也是正确的 M3 配色，只是不是
-      // 用户自己的颜色。
+      // 回退后主题仍可用：Material 基准配色本身是有效的 M3 配色，只是未采用
+      // 系统强调色。
       console.warn('Material 3 主题：取不到系统强调色，改用基准配色', error);
       resolved = presetPalette(DEFAULT_PRESET);
       published.systemSeed = null;
@@ -703,7 +705,7 @@ function applyClient(ctx) {
     }
   };
 
-  /** 按 `preference.source` 解析配色，然后装上。 */
+  /** 按 `preference.source` 解析配色并安装。 */
   const resolve = async () => {
     cancelRetry();
     if (preference.source === SOURCE_PRESET) {
@@ -729,8 +731,7 @@ function applyClient(ctx) {
       return;
     }
 
-    // 自动模式要走一次 Host 往返；在它答复之前保持现有主题层，界面就不会闪出一帧
-    // 没上色的样子。
+    // 自动模式需要一次 Host 往返；答复到达前保留现有主题层，避免界面出现未着色的帧。
     published.source = preference.source;
     published.preset = preference.preset;
     published.enabled = preference.enabled;
@@ -772,7 +773,7 @@ function applyClient(ctx) {
 
   ctx.effect(() => () => cancelRetry(), NS + ' palette retry');
 
-  // 自动模式是默认值，所以加载时就先解析一次。
+  // 自动模式是默认来源，加载时先解析一次。
   void resolve();
 }
 const DICTS = {

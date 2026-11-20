@@ -1,13 +1,15 @@
 /**
- * 一次性的排查工具：列出仍然画着边框的 CSS 规则。
+ * 排查工具：列出 app.asar 中命中指定模式的 CSS 规则。
  *
- * 只读取已安装的 app.asar，作用是让主题作者能确认截图里看到的那条边框确实来自某条本
- * 主题没清掉的规则，而不是靠猜。
+ * 读取已安装 Harness 的 app.asar，解析其目录树并检索 CSS 声明，输出命中的选择器
+ * 与声明块。
+ *
+ *   node build/scan-css.mjs <body-pattern> [selector-pattern] [limit]
  */
 
 import { readFileSync } from 'node:fs';
 
-// 指向你自己机器上已安装的 Harness 包：
+// 已安装 Harness 的 app.asar 路径，由环境变量 DSH_ASAR 指定。
 //   $env:DSH_ASAR = '<install>/resources/app.asar'
 const ASAR = process.env.DSH_ASAR;
 if (!ASAR) {
@@ -19,7 +21,7 @@ const headerSize = buffer.readUInt32LE(12);
 const tree = JSON.parse(buffer.subarray(16, 16 + headerSize).toString('utf8'));
 const dataOffset = 16 + Math.ceil(headerSize / 4) * 4;
 
-/** 把 asar 的目录树摊平成一组好读的 [路径, 条目] 对。 */
+/** 把 app.asar 的目录树展开为 [路径, 条目] 列表。 */
 function walk(node, prefix, out) {
   for (const [name, entry] of Object.entries(node.files ?? {})) {
     const path = `${prefix}/${name}`;

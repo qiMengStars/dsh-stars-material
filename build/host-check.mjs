@@ -1,8 +1,9 @@
 /**
  * Host 半边的离线检查。
  *
- * 重点不是证明 Windows 会返回强调色——那只有真机桌面才可能——而是证明每一条失败路径都
- * 以形状完整的 `{ ok: false, reason }` 收场而不是抛错，以及路由回的 HTTP 状态码是对的。
+ * 检查重点不是验证 Windows 是否返回强调色（该行为只能在真实桌面环境中验证），
+ * 而是验证每条失败路径均以形状完整的 `{ ok: false, reason }` 结束而非抛错，并校验
+ * 路由返回的 HTTP 状态码。
  */
 
 import { strict as assert } from 'node:assert';
@@ -22,7 +23,7 @@ const ctx = {
   },
   webServer: {
     getOrigin() {
-      throw new Error('listen 还没绑定端口');
+      throw new Error('listen 尚未绑定端口');
     },
     register(route) {
       registered = route;
@@ -38,7 +39,7 @@ assert.ok(registered !== null, 'apply 必须注册一条路由');
 assert.equal(registered.kind, 'exact');
 assert.equal(registered.path, '/stars-material/palette');
 
-/** node 那对请求/响应对象的最小替身。 */
+/** Node.js 请求/响应对象的最小替身。 */
 function exchange(headers) {
   const state = { statusCode: 0, headers: {}, body: '' };
   const request = { headers, method: 'GET', url: '/stars-material/palette' };
@@ -74,8 +75,8 @@ const noHost = exchange({});
 await registered.handler(noHost.request, noHost.response);
 assert.equal(noHost.state.statusCode, 403, '没有 Host 头的请求必须被拒');
 
-// 不管沙箱怎么处理 `reg.exe`，答复都得是 Client 能据以做决定的形状：要么一份配色，要么
-// 一句原因。
+// 无论沙箱如何处理 `reg.exe`，答复都必须是 Client 可据以判断的形状：要么一份配色，
+// 要么一条原因。
 const payload = JSON.parse(sameOrigin.state.body);
 assert.equal(typeof payload.ok, 'boolean');
 if (payload.ok) {
@@ -84,19 +85,19 @@ if (payload.ok) {
   assert.equal(payload.dark.length, 270);
 } else {
   assert.equal(typeof payload.reason, 'string');
-  assert.ok(payload.reason.length > 0, '失败也必须说清原因');
+  assert.ok(payload.reason.length > 0, '失败时必须给出原因');
 }
 
-// 缓存窗口内的第二次请求不该重新读一遍；能看见的证据就是响应体逐字节相同。
+// 缓存窗口内的第二次请求不得重复读取；响应体逐字节相同即为证据。
 const again = exchange({ host: '127.0.0.1:12345', origin: 'http://127.0.0.1:12345' });
 await registered.handler(again.request, again.response);
 assert.equal(again.state.body, sameOrigin.state.body, '答复必须被缓存');
 
 for (const dispose of effects) dispose();
-assert.equal(disposed, 1, '撤掉 effect 必须把路由也移除');
+assert.equal(disposed, 1, '移除 effect 时必须一并移除路由');
 
 // ---------------------------------------------------------------------------
-// 端口已绑定的情况：`getOrigin()` 有答复，于是精确比对 Host 那条分支会跑起来。
+// 端口已绑定：`getOrigin()` 返回有效值，精确比对 Host 的分支随之执行。
 // ---------------------------------------------------------------------------
 
 const boundEffects = [];
@@ -137,39 +138,38 @@ async function statusOf(headers) {
   return exchange.state.statusCode;
 }
 
-assert.equal(await statusOf({ host: '127.0.0.1:12345' }), 200, 'harness 自己发的请求必须被受理');
+assert.equal(await statusOf({ host: '127.0.0.1:12345' }), 200, 'Harness 发起的请求必须被受理');
 assert.equal(
   await statusOf({ host: '127.0.0.1:12345', origin: 'http://127.0.0.1:12345' }),
   200,
-  'harness 的 origin 必须被接受',
+  'Harness 的 origin 必须被接受',
 );
 assert.equal(
   await statusOf({ host: 'localhost:12345', origin: 'http://localhost:12345' }),
   200,
-  '同一个监听器的 localhost 写法也必须被接受',
+  '同一监听器的 localhost 写法必须被接受',
 );
-// DNS 重绑的洞：别的站点发来的页面照样带着匹配的 Host 打到环回端口，这时只有它的 Origin
-// 能暴露它。
+// DNS 重绑风险：外站页面可携带匹配的 Host 访问环回端口，此时只有 Origin 能区分来源。
 assert.equal(
   await statusOf({ host: '127.0.0.1:12345', origin: 'http://evil.example' }),
   403,
-  'Host 匹配但 Origin 是外站的，必须拒',
+  'Host 匹配但 Origin 为外站时必须拒绝',
 );
 assert.equal(
   await statusOf({ host: '127.0.0.1:12345', origin: 'http://127.0.0.1:9999' }),
   403,
-  '环回端口不同，就是另一个发送方',
+  '环回端口不同即视为不同发送方',
 );
 assert.equal(
   await statusOf({ host: 'attacker.example:12345' }),
   403,
-  'Host 对不上必须拒',
+  'Host 不匹配时必须拒绝',
 );
 
 for (const dispose of boundEffects) dispose();
 
 console.log(`路由            ${registered.kind} ${registered.path}`);
-console.log(`取 origin 失败   照样不崩`);
-console.log(`origin 已绑定    外站 Origin 被拒，环回放行`);
+console.log(`取 origin 失败   仍返回结构化答复`);
+console.log(`origin 已绑定    外站 Origin 被拒，环回请求放行`);
 console.log(`答复             ${payload.ok ? `种子色 ${payload.seed}` : `拒绝：${payload.reason}`}`);
 console.log('host-check 通过');

@@ -1,16 +1,16 @@
 /**
  * 重新生成 vendor 目录下的 Material Color Utilities 副本。
  *
- * 上游包是 ESM，相对 import 不带 `.js` 后缀，Node 解析不了，所以仓库在
- * `vendor/material-color-utilities` 里留了一份补过后缀的副本。这个脚本从一份刚装好的包
- * 复现那份副本。把包装到任意可写目录（仓库外的临时目录就行），把路径传进来：
+ * 上游包为 ESM，相对 import 不带 `.js` 后缀，Node 无法解析；仓库因此在
+ * `vendor/material-color-utilities` 保留一份补齐后缀的副本。本脚本从已安装的包复现该副本：
+ * 先将包安装到任意可写目录，再将包路径作为命令行参数传入。
  *
  *   cmd /c "npm install @material/material-color-utilities@0.4.0 --no-audit --no-fund --ignore-scripts --cache %TEMP%\mcu-cache --prefix %TEMP%\mcu"
  *   node build/vendor-mcu.mjs %TEMP%\mcu\node_modules\@material\material-color-utilities
  *
- * 路径必须显式给：没有哪个默认值在别人的机器上是对的。生成的这份副本就是
- * `build/generate-palettes.mjs` 加载的东西，所以配色流水线不需要仓库之外的任何文件。
- * Material Color Utilities 是 Apache-2.0，它的 LICENSE 会一起抄过去。
+ * 包路径必须显式给出，不存在适用于所有机器的默认路径。生成的副本由
+ * `build/generate-palettes.mjs` 加载，使配色流水线不依赖仓库之外的文件。
+ * Material Color Utilities 采用 Apache-2.0 许可证，LICENSE 一并复制。
  */
 
 import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
@@ -23,7 +23,7 @@ const TARGET = resolve(REPO, 'vendor/material-color-utilities');
 const ARGUMENT = process.argv[2];
 
 if (ARGUMENT === undefined) {
-  process.stderr.write('请给出已安装的包路径：node build/vendor-mcu.mjs <package-dir>\n');
+  process.stderr.write('缺少已安装包的路径：node build/vendor-mcu.mjs <package-dir>\n');
   process.exit(1);
 }
 
@@ -32,7 +32,7 @@ const SOURCE = resolve(REPO, ARGUMENT);
 try {
   await stat(join(SOURCE, 'index.js'));
 } catch {
-  process.stderr.write('这个路径下没有 Material Color Utilities 包：' + SOURCE + '\n');
+  process.stderr.write('该路径下不存在 Material Color Utilities 包：' + SOURCE + '\n');
   process.stderr.write('请传入包目录：node build/vendor-mcu.mjs <package-dir>\n');
   process.exit(1);
 }

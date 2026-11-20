@@ -1,14 +1,14 @@
 /**
- * 检查插件是否给产品会读的每个 token 都上了色，且没有声明任何实际不存在的 token。
+ * 校验插件是否覆盖产品读取的全部 token，且未声明实际不存在的 token。
  *
  *   node build/validate-coverage.mjs
  *
- * 这里比对两个集合。产品 token 是 `design-platform.css` 里被赋值的名字；漏一个，界面
- * 那一部分就还是原装颜色。声明名是任意 vendored 样式表里被赋值的每个 `--dsw-*`；声明
- * 一个哪儿都找不到的名字，要么是笔误，要么是一次我们还没跟上的改名。
+ * 本脚本比对两个集合。产品 token 指在 `design-platform.css` 中被赋值的名字，遗漏会使
+ * 对应界面区域无法应用主题配色。声明名指任意 vendored 样式表中被赋值的每个 `--dsw-*`；
+ * 声明不存在的名字意味着笔误或尚未同步的改名。
  *
- * 两边只要有一边对不上就以非零码退出，于是新版 DSH 里的一次改名会在这里失败，而不是
- * 变成界面上某个永远不变的颜色。
+ * 任一集合不匹配即以非零码退出，使新版 DSH 中的改名在此处失败，而非在界面上留下
+ * 一个永不变化的颜色。
  */
 
 import { readFile } from 'node:fs/promises';
@@ -31,10 +31,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
 const SURVEY = resolve(REPO, 'vendor/dsh-survey');
 
-/** 颜色权威：只有这张表的完整名字集合必须被覆盖。 */
+/** 颜色权威样式表：仅该表的完整名字集合必须被覆盖。 */
 const COLOUR_SHEET = resolve(SURVEY, 'design-platform.css');
 
-/** 全部样式表，用来判断一个被声明的名字到底存不存在。 */
+/** 全部样式表，用于判断被声明的名字是否存在。 */
 const ALL_SHEETS = [
   'design-platform.css',
   'base.css',
@@ -42,10 +42,10 @@ const ALL_SHEETS = [
   'gradient-shadow-text.css',
 ].map((name) => resolve(SURVEY, name));
 
-/** 产品会读、但没有任何 vendored 样式表给它赋值的名字（它们靠 fallback 生效）。 */
+/** 产品会读取、但任何 vendored 样式表均未给其赋值的名字（依靠 fallback 生效）。 */
 const REFERENCED_ONLY = new Set(['--dsw-alias-border-selected']);
 
-/** 给定来源里被赋值的名字，去掉 `--dsw-static-*` 那几组原始色阶。 */
+/** 给定来源中被赋值的名字，排除 `--dsw-static-*` 原始色阶。 */
 function declaredNames(sources) {
   const names = new Set();
   for (const source of sources) {

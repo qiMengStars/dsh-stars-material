@@ -1,8 +1,7 @@
-// 打印一份配色的完整「角色 → 十六进制」表，用来把截图里的某个颜色归到确切的
-// Material 3 角色上。
+// 打印一份配色的「角色 → 十六进制」表，用于把截图中的颜色对应到 Material 3 角色。
 //
-// 它读的是随包发出去的 Host 引擎，而不是生成的预设表，所以只有运行中的 harness 才知道
-// 的种子色（系统强调色）也能用产品同一条代码路径导出来。
+// 配色由随包发布的 Host 引擎按种子色推导，与产品运行时共用同一条代码路径；
+// 种子色取命令行参数，缺省时使用 DEFAULT_PRESET。方案取第二个参数，可选 light 或 dark。
 //
 //   node build/print-palette.mjs '#6750a4' light
 //   node build/print-palette.mjs baseline dark

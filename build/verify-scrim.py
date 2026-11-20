@@ -1,9 +1,10 @@
-"""确认 DSH 截图里被压暗的背景确实是 Material 3 的 scrim。
+"""校验 DSH 截图中的压暗背景是否为 Material 3 scrim。
 
-插件把 --dsw-alias-bg-mask-1 映射成 32% alpha 的 scrim。如果主题真的在跑，每一处被压暗的
-表面都必须正好是 scrim 叠在某个表面色上的结果，所以这个脚本按配色表重新合成一遍，找那些
-混色值。
-只读：给一个 PNG 加一份配色表，不碰运行中的应用。
+插件将 --dsw-alias-bg-mask-1 映射为 alpha 0.32 的 scrim。主题生效时，每处压暗表面
+均等于 scrim 与某个 Material 3 表面色按该 alpha 混色的结果。本脚本读取配色表，
+按同一 alpha 逐角色合成混色值，并统计各混色值在截图中的像素数。
+
+参数依次为截图路径、build/print-palette.mjs 输出的配色表路径。
 """
 
 from __future__ import annotations
@@ -42,7 +43,7 @@ def main() -> int:
     print(f"按 {ALPHA} 的 scrim 不透明度检验\n")
 
     matches = 0
-    print("-- 被压暗的表面（scrim 叠在某个 Material 3 角色上）--")
+    print("-- 压暗表面（scrim 与 Material 3 角色混色）--")
     for role, rgb in roles:
         blended = tuple(round((1 - ALPHA) * channel) for channel in rgb)
         n = counts.get(blended, 0)
@@ -51,7 +52,7 @@ def main() -> int:
         matches += n
         print(
             f"  {hexs(blended)}  {n:>8} px  {100.0 * n / total:5.2f}%"
-            f"  = scrim 叠在 {role} {hexs(rgb)} 上"
+            f"  = scrim 与 {role} {hexs(rgb)} 混色"
         )
 
     print(f"\n被压暗的 Material 3 像素：{matches}（{100.0 * matches / total:.2f}%）")

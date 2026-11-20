@@ -1,8 +1,8 @@
 /**
  * Host 端的配色引擎 —— 由 build/bundle-host.mjs 生成。
  *
- * 拼起三样必须彼此一致的东西：角色表、引擎，以及引擎赖以构建的 Material Color
- * Utilities 命名空间。要重新生成就跑：
+ * 本模块合并角色表、配色引擎，以及引擎依赖的 Material Color Utilities 命名空间，
+ * 三者必须彼此一致。重新生成时执行：
  *
  *   node build/bundle-host.mjs
  */
@@ -10,14 +10,14 @@
 import * as mcu from './mcu/index.js';
 
 /**
- * 生成器、Host 端引擎与运行时共用的角色顺序。
+ * 生成器、Host 端引擎与运行时共用的角色顺序定义。
  *
- * 前 36 项直接从 `DynamicScheme` 实例上读（它们是 MaterialDynamicColors 为每种
- * M3 方案派生的 ARGB getter）。`surfaceTint` 不是 DynamicScheme 的 getter，生成器
+ * 前 36 项直接读取 `DynamicScheme` 实例上的 getter，即 MaterialDynamicColors 为各
+ * M3 方案派生的 ARGB getter。`surfaceTint` 不是 `DynamicScheme` 的 getter，生成器
  * 改从 `MaterialDynamicColors.surfaceTint` 取。
  *
- * 后 8 项是 Material 3 没有定义、但聊天应用需要的语义色对（成功 / 警告）。它们
- * 取自固定的色调板，所以无论种子色是什么，都保持可辨认的绿色与琥珀色。
+ * 后 8 项是 Material 3 未定义、但聊天应用需要的语义色对（成功 / 警告）。取值来自
+ * 固定色调板，与种子色无关，因此始终维持可辨认的绿色与琥珀色。
  */
 const ROLE_ORDER = [
   'primary',
@@ -58,7 +58,7 @@ const ROLE_ORDER = [
   'surfaceContainerHighest',
 ];
 
-/** 这些角色来自固定色调板，而不是种子色。 */
+/** 取自固定色调板的角色。 */
 const FIXED_ROLE_ORDER = [
   'success',
   'onSuccess',
@@ -70,15 +70,15 @@ const FIXED_ROLE_ORDER = [
   'onWarningContainer',
 ];
 
-/** DynamicScheme 直接暴露的 36 个角色。 */
+/** `DynamicScheme` 直接暴露的 36 个角色。 */
 const SCHEME_ROLE_ORDER = ROLE_ORDER;
 
 /**
- * 本插件只带一种调和方式。
+ * 本插件只保留一种调和方式。
  *
- * Material 3 有九种方案变体，全都提供过之后设置页变成了取色器，配色也没法用一句
- * 话说清。色调斑点（tonal spot）是 M3 的默认方案，也是文档里最先介绍的一种，因此
- * 只保留它。变体 id 仍留在数据结构里，因为存档的偏好和生成的表还按它取键。
+ * Material 3 提供九种方案变体。全部暴露后，设置页退化为取色器，配色也难以用单一
+ * 描述说明。tonal spot 是 M3 的默认方案，也是文档最先介绍的一种，因此只保留该变体。
+ * 变体 id 仍保留在数据结构中，因为存档偏好与生成表仍按该 id 取键。
  */
 const VARIANT_ID = 'tonalSpot';
 
@@ -86,11 +86,10 @@ const VARIANT_ID = 'tonalSpot';
 const VARIANT_CLASS = 'SchemeTonalSpot';
 
 /**
- * 手动模式下提供的 8 个 Material 3 预设。
+ * 手动模式提供的 8 个 Material 3 预设。
  *
- * 种子色取自 M3 为自己基线配色公布的色值，所以选一个预设得到的就是文档里那张
- * `#6750A4` 角色表，而不是它的近似值。自动模式完全不用这份列表——它在运行时从
- * 操作系统强调色推导配色。
+ * 种子色取自 M3 为基线配色公布的色值，选择某预设得到的即是文档中的 `#6750A4`
+ * 角色表，而非近似值。自动模式不使用该列表，其在运行时由操作系统强调色推导配色。
  */
 const PRESETS = [
   { id: 'baseline', hex: '#6750a4', label: 'Material baseline' },
@@ -103,15 +102,14 @@ const PRESETS = [
   { id: 'blueGrey', hex: '#525e7d', label: 'Blue grey' },
 ];
 
-/** 读不到系统颜色时使用的预设。 */
+/** 读不到系统颜色时采用的预设。 */
 const DEFAULT_PRESET = 'baseline';
 
 /**
- * 样式表需要、但 DSH 没提供的颜色。
+ * 样式表需要、但 DSH 未提供的颜色。
  *
- * 运行时把每一项解析出的角色写成 `:root` 上的 `--dsh-m3-*` 自定义属性，样式表只
- * 引用这些属性。列表放在这里，是为了让生成器、Host 引擎与 Client 对"哪些角色要过
- * 桥"保持一致。
+ * 运行时将每一项的解析结果写成 `:root` 上的 `--dsh-m3-*` 自定义属性，样式表仅引用
+ * 这些属性。该列表定义于此，使生成器、Host 引擎与 Client 对需要过桥的角色保持一致。
  */
 const BRIDGE_ROLES = [
   { variable: '--dsh-m3-surface', role: 'surface' },
@@ -127,8 +125,8 @@ const BRIDGE_ROLES = [
   { variable: '--dsh-m3-primary', role: 'primary' },
   { variable: '--dsh-m3-on-primary', role: 'onPrimary' },
   { variable: '--dsh-m3-primary-container', role: 'primaryContainer' },
-  // 选中行的填充和实心色调按钮都需要第二层容器色；没有这两项，样式表只能借用
-  // `primary`，而那不是容器该用的角色。
+  // 选中行的填充与实心色调按钮都需要第二层容器色。缺少这两项时，样式表只能借用
+  // `primary`，该角色并不适用于容器。
   { variable: '--dsh-m3-secondary-container', role: 'secondaryContainer' },
   { variable: '--dsh-m3-on-secondary-container', role: 'onSecondaryContainer' },
   { variable: '--dsh-m3-error', role: 'error' },
@@ -141,27 +139,26 @@ const BRIDGE_ROLES = [
 /**
  * 构建脚本与 Host 端共用的配色引擎。
  *
- * 所有入口都由 `createPaletteEngine(mcu)` 生成：它把 Material Color Utilities 的
- * 模块对象作为参数收进来，而不是直接 import。这样同一份实现能被两个完全不同的加载
- * 器使用：
+ * 所有入口均由 `createPaletteEngine(mcu)` 生成：该函数接收 Material Color Utilities
+ * 的模块对象作为参数，而非直接 import。同一实现因此可用于两个不同的加载器：
  *
- *   - `build/generate-palettes.mjs` 直接传 vendored 目录。
- *   - `plugin/lib/palette.js` 由本文件加 `src/parts/palette-spec.js` 拼成，随包带上
- *     `plugin/lib/mcu/` 里的那份依赖。
+ *   - `build/generate-palettes.mjs` 直接传入 vendored 目录。
+ *   - `plugin/lib/palette.js` 由本文件与 `src/parts/palette-spec.js` 拼接而成，随包携带
+ *     `plugin/lib/mcu/` 中的依赖。
  *
- * 下面唯一的 import 是角色表，它在打包拼接时会被去掉（见 `build/bundle-client.mjs`
+ * 文件中唯一的 import 是角色表，打包拼接时会移除该声明（见 `build/bundle-client.mjs`
  * 与 `build/bundle-host.mjs`）。
  *
- * 每套配色都压成一个十六进制字符串：45 个角色 × 6 位，按 `ROLE_ORDER` 排列，去掉
- * 前面的 `#`。切字符串比每套配色带一个对象便宜，生成出来的文件也还看得懂。
+ * 每套配色压缩为一个十六进制字符串：45 个角色 × 6 位，按 `ROLE_ORDER` 排列，去掉
+ * 前缀 `#`。按字符串切片比按对象携带每套配色开销更低，生成的文件也仍可阅读。
  */
 
-/** 角色名到它在压缩串里的槽位。 */
+/** 角色名到其在压缩串中槽位的映射。 */
 const ROLE_INDEX = new Map(
   [...ROLE_ORDER, 'surfaceTint', ...FIXED_ROLE_ORDER].map((role, index) => [role, index]),
 );
 
-/** 固定的色相让成功/警告色不随种子色漂移。 */
+/** 固定色相使成功色与警告色不随种子色漂移。 */
 const FIXED_PALETTES = {
   success: { hue: 145, chroma: 48 },
   warning: { hue: 75, chroma: 60 },
@@ -174,10 +171,10 @@ const FIXED_TONES = {
 };
 
 /**
- * 在一个 Material Color Utilities 模块对象上建引擎。
+ * 在一个 Material Color Utilities 模块对象上建立引擎。
  *
  * @param mcu vendored 的 `@material/material-color-utilities` 命名空间。
- * @returns 两半都需要的配色操作。
+ * @returns 两半共用的配色操作。
  */
 function createPaletteEngine(mcu) {
   const {
@@ -222,22 +219,22 @@ function createPaletteEngine(mcu) {
     return values;
   }
 
-  /** 一套方案的全部角色，已压缩。 */
+  /** 压缩一套方案的全部角色。 */
   function packScheme(scheme, isDark) {
     const values = [...schemeRoleValues(scheme), ...fixedRoleValues(isDark)];
     for (const value of values) {
       if (!/^#[0-9a-f]{6}$/u.test(value)) {
-        throw new Error('配色引擎：角色取值不对劲 "' + value + '"');
+        throw new Error('配色引擎：角色取值格式不正确 "' + value + '"');
       }
     }
     return values.map((hex) => hex.slice(1)).join('');
   }
 
   /**
-   * 用本插件唯一的调和方式推导种子色的明暗两套方案。
+   * 用本插件唯一的调和方式，从种子色推导明暗两套方案。
    *
-   * 色调斑点是 Material 3 的默认方案，所以一个预设得到的就是设计系统文档里那张
-   * 角色表，而不是它的近似值。
+   * tonal spot 是 Material 3 的默认方案，因此从一个预设得到的即是设计系统文档中的
+   * 角色表，而非近似值。
    */
   function paletteFromSeed(seedHex) {
     const source = Hct.fromInt(argbFromHex(seedHex));
@@ -263,7 +260,7 @@ function createPaletteEngine(mcu) {
     return unpack(packed, role) + byte.toString(16).padStart(2, '0');
   }
 
-  /** 颜色的彩度，用来判断系统强调色是不是接近中性。 */
+  /** 颜色的彩度，用于判断系统强调色是否接近中性。 */
   function chromaOf(seedHex) {
     return Hct.fromInt(argbFromHex(seedHex)).chroma;
   }

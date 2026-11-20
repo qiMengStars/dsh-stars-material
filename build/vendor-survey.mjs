@@ -1,16 +1,15 @@
 /**
- * 从已安装的 app.asar 里重新抽出 vendored 的 DSH 令牌样式表。
+ * 从已安装的 app.asar 中重新抽取 vendored 的 DSH 令牌样式表。
  *
  *   node build/vendor-survey.mjs <path-to-app.asar>
  *
- * 源头是你自己装的那份 DeepSeek Harness，所以必须在命令行里给出（或放进 `DSH_ASAR`），
- * 没有哪个默认值在别人的机器上是对的。抽出来的文件落在 `vendor/dsh-survey/`，由
- * `build/validate-coverage.mjs` 读取，这样覆盖门禁不需要一个能读压缩包内部的 shell 也能
- * 跑。
+ * 数据来源为本地安装的 DeepSeek Harness，因此 app.asar 路径须由命令行参数或环境变量
+ * `DSH_ASAR` 显式指定，不存在适用于所有机器的默认路径。抽取结果写入 `vendor/dsh-survey/`，
+ * 由 `build/validate-coverage.mjs` 读取，使覆盖校验无需依赖能够读取压缩包内部的 shell。
  *
- * ASAR 的结构（pickled 头）：`headerSize` 在偏移 12 处，是小端 uint32；JSON 目录从偏移
- * 16 开始；正文从 `16 + ceil(headerSize / 4) * 4` 开始。没有数值 `size`/`offset` 的条目
- * 是链接不是文件，要跳过。
+ * ASAR 结构（pickled 头）：偏移 12 处为小端 uint32 `headerSize`；JSON 目录自偏移 16
+ * 开始；正文自 `16 + ceil(headerSize / 4) * 4` 开始。缺少数值 `size`/`offset` 的条目
+ * 为链接而非文件，应跳过。
  */
 
 import { open, mkdir, writeFile } from 'node:fs/promises';
@@ -21,39 +20,39 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
 const OUT_DIR = resolve(REPO, 'vendor/dsh-survey');
 
-// 已安装的 Harness 把包放在哪，各机器不同。把路径作为第一个参数传进来，或设 DSH_ASAR。
+// 已安装 Harness 的 app.asar 路径，由环境变量 DSH_ASAR 指定。
 const DEFAULT_ASAR = process.env.DSH_ASAR ?? '';
 
-/** 原样抄出来的文件，以及每个为什么值得留。 */
+/** 原样抽取的文件，以及各自的保留依据。 */
 const TARGETS = [
   {
     name: 'design-platform.css',
     match: (path) => path.endsWith('dsh-client-ui-theme/src/styles/design-platform.css'),
-    why: '唯一的颜色权威：明暗两套的全部 --dsw-* 颜色令牌。',
+    why: '颜色令牌的权威定义：包含明暗两套的全部 --dsw-* 颜色令牌。',
   },
   {
     name: 'base.css',
     match: (path) => path.endsWith('dsh-client-ui-theme/src/styles/base.css'),
-    why: '圆角刻度和字体族，形状映射必须与它一致。',
+    why: '定义圆角刻度与字体族，形状映射须与此保持一致。',
   },
   {
     name: 'focus.css',
     match: (path) => path.endsWith('dsh-client-ui-theme/src/styles/focus.css'),
-    why: '证明 --dsw-focus-ring-width 本来就是 2px，也就是本来就符合 M3。',
+    why: '定义 --dsw-focus-ring-width 为 2px，与 Material 3 一致。',
   },
   {
     name: 'gradient-shadow-text.css',
     match: (path) => path.endsWith('dsh-client-ui-theme/src/styles/gradient-shadow-text.css'),
-    why: '声明了 --dsw-shadow-lv* 和 --dsw-elevation-*，别的样式表都没定义它们。',
+    why: '定义 --dsw-shadow-lv* 与 --dsw-elevation-*，其余样式表未定义这些属性。',
   },
 ];
 
 /**
- * 抽出来的这几份样式表所遵循的协议。
+ * 抽取的样式表所遵循的许可协议。
  *
- * 它们来自 DeepSeek Harness 的包，那些包声明 `"license": "MIT"`，并在自己的 `LICENSE`
- * 里逐字带着这段文字。只抄文件不抄声明，就成了缺少 MIT 所要求声明的再分发，所以每次运行
- * 都在旁边重写一份，而不是留给某个一次性的手工步骤。
+ * 这些样式表来自声明 `"license": "MIT"` 的 DeepSeek Harness 包，其 `LICENSE` 中
+ * 包含以下声明原文。再分发时须附带该声明，因此每次运行都在输出目录重写一份 LICENSE，
+ * 而不交由一次性手工步骤处理。
  */
 const UPSTREAM_LICENCE = `MIT License
 
@@ -92,7 +91,7 @@ async function readAsar(asarPath) {
 
   const dataOffset = 16 + Math.ceil(headerSize / 4) * 4;
 
-  /** 把目录树摊平成 `{ path, offset, size }` 的文件记录。 */
+  /** 把 ASAR 目录树展开为 `{ path, offset, size }` 文件记录。 */
   const files = [];
   const walk = (node, prefix) => {
     for (const [name, entry] of Object.entries(node.files ?? {})) {
@@ -146,35 +145,36 @@ const rows = TARGETS.map((target, index) => {
   return `| \`${name}\` | ${bytes} | ${target.why} |`;
 }).join('\n');
 
-const readme = `# 从 DSH 抽出来的令牌样式表
+const readme = `# 从 DSH 抽取的令牌样式表
 
-从已安装的 DeepSeek Harness \`app.asar\` 里原样取出。要重新生成就跑：
+以下文件从已安装的 DeepSeek Harness \`app.asar\` 中原样抽取。重新生成时执行：
 
 \`\`\`
 node build/vendor-survey.mjs <path-to-app.asar>
 \`\`\`
 
-| 文件 | 字节 | 为什么要留 |
+| 文件 | 字节 | 保留依据 |
 | --- | --- | --- |
 ${rows}
 
-\`build/validate-coverage.mjs\` 四份都读。\`design-platform.css\` 给出产品保证会读的颜色
-令牌集合（所以一个都不能缺）；四份的并集给出真实存在的名字集合（所以一个都不能编）。
+\`build/validate-coverage.mjs\` 读取全部四份样式表。\`design-platform.css\` 定义产品使用的
+颜色令牌集合，其中令牌不得缺失；四份样式表的并集定义实际存在的令牌名称集合，
+不得凭空编造名称。
 
-## 协议
+## 许可协议
 
-这几份样式表抄自 DeepSeek Harness，它的包是 MIT（\`Copyright (c) 2026 DeepSeek\`）。
-它要求的声明就在旁边的 [LICENSE](LICENSE) 里，每次运行这个脚本都会重写一遍。
+这些样式表抽取自 DeepSeek Harness 的包，其许可协议为 MIT（\`Copyright (c) 2026 DeepSeek\`）。
+协议要求的声明保存在同目录的 [LICENSE](LICENSE) 中，每次运行本脚本都会重写该文件。
 
-## DSH 换了新的前端构建时
+## DSH 前端构建变更后
 
 1. \`node build/vendor-survey.mjs <path-to-app.asar>\`
-2. \`node build/validate-coverage.mjs\`——有令牌被改名、新增或删除就会以非零退出。
-3. 按它报的东西更新 \`src/parts/token-map.js\`。
-4. \`node build/verify.mjs\`，然后重装插件。
+2. \`node build/validate-coverage.mjs\`：令牌被重命名、新增或删除时以非零状态退出。
+3. 依据校验结果更新 \`src/parts/token-map.js\`。
+4. \`node build/verify.mjs\`，随后重新安装插件。
 
-编译后的前端包（\`dist/assets/index-*.css\`，约 92 KB）是刻意不抄的：那是构建产物，而它
-读到的每个令牌都在上面四份里声明过。
+编译后的前端包（\`dist/assets/index-*.css\`，约 92 KB）不予抽取：该文件为构建产物，
+其引用的令牌均在以上四份样式表中声明。
 `;
 
 await writeFile(join(OUT_DIR, 'README.md'), readme, 'utf8');

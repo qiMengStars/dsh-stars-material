@@ -3,18 +3,18 @@
  *
  *   node build/bundle-host.mjs
  *
- * Host 半边需要两样 Client 半边不能有的东西：Material Color Utilities 的实现（用来
- * 从系统强调色推导配色）和配色引擎。两样都抄进 `plugin/lib/`，这样发出去的包自带
- * 依赖，不需要 `node_modules` 也能装。
+ * Host 端需要 Material Color Utilities 实现（用于从系统强调色推导配色）和配色引擎，
+ * Client 端不携带这两项。本脚本将其复制到 `plugin/lib/`，使发布包自带依赖，
+ * 安装时无需 `node_modules`。
  *
- * 和 `build/bundle-client.mjs` 不同，这里不做拼接：Host 半边就是一个普通的 Node ESM
- * 模块图，`import` 能用，每个文件也各自保留作用域。
+ * 与 `build/bundle-client.mjs` 不同，本脚本不做源码拼接：Host 产物保持为普通 Node ESM
+ * 模块图，`import` 声明原样保留，各模块作用域独立。
  *
  * 产物：
  *   plugin/lib/mcu/index.js      vendored 库的入口
  *   plugin/lib/mcu/**            库的其余部分，`.js` 后缀保持不变
- *   plugin/lib/palette.js        引擎 + 角色表 + MCU，合成一个模块
- *   plugin/lib/mcu/LICENSE       Apache-2.0，再分发必须带上
+ *   plugin/lib/palette.js        配色引擎、角色表与 MCU 命名空间合成的单一模块
+ *   plugin/lib/mcu/LICENSE       Apache-2.0 许可证，再分发时必须附带
  */
 
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -28,11 +28,10 @@ const LIB = resolve(REPO, 'plugin/lib');
 const MCU_OUT = resolve(LIB, 'mcu');
 
 /**
- * 抄进包里的条目。
+ * 复制到发布包中的 vendored 库条目。
  *
- * 整棵树照抄，不挑子集：`index.js` 会把每个目录都再导出一遍，裁剪就等于要改第三方
- * 的入口文件。这些是只在 Host 跑的代码（永远不进浏览器），整棵树约 340 KB，比手工
- * 维护一份子集便宜——那种子集会在某个间接 import 出现时悄悄坏掉。
+ * 整树复制而非筛选子集：`index.js` 会再导出每个目录，裁剪子集需要改动第三方入口文件。
+ * 这些代码仅在 Host 端运行，整树约 340 KB；维护手工子集会随间接 import 变化而失效。
  */
 const KEEP = [
   'index.js',
@@ -50,7 +49,7 @@ const KEEP = [
   'utils',
 ];
 
-/** 读一个模块，把它的相对路径改写成在 `plugin/lib` 里也能解析的形式。 */
+/** 读取模块源码，将相对 import 路径改写为在 `plugin/lib` 中可解析的形式。 */
 function rewriteSpecifiers(source, moduleResolver) {
   return source.replace(
     /(\bfrom\s*|\bimport\s*\(\s*)(['"])(\.\.?\/[^'"]+)\2/gu,
@@ -65,8 +64,8 @@ async function main() {
   await rm(MCU_OUT, { recursive: true, force: true });
   await mkdir(MCU_OUT, { recursive: true });
 
-  // 1. 原样抄库。它已经是打过补丁的版本，每个相对 import 都带 `.js`——那份是
-  //    `build/vendor-mcu.mjs` 生成的。
+  // 1. 原样复制 vendored 库。该版本已由 build/vendor-mcu.mjs 打过补丁，
+  //    每个相对 import 均带 `.js` 后缀。
   for (const name of KEEP) {
     await cp(resolve(VENDOR, name), resolve(MCU_OUT, name), { recursive: true });
   }
@@ -88,7 +87,7 @@ async function main() {
     'utf8',
   );
 
-  // 2. 生成配色模块：角色表、引擎，以及引擎所依赖的 MCU 命名空间。
+  // 2. 生成配色模块：合并角色表、配色引擎，以及引擎依赖的 MCU 命名空间。
   const spec = await readFile(resolve(REPO, 'src/parts/palette-spec.js'), 'utf8');
   const engine = await readFile(resolve(REPO, 'src/parts/palette-engine.js'), 'utf8');
 
@@ -100,8 +99,8 @@ async function main() {
   const palette = `/**
  * Host 端的配色引擎 —— 由 build/bundle-host.mjs 生成。
  *
- * 拼起三样必须彼此一致的东西：角色表、引擎，以及引擎赖以构建的 Material Color
- * Utilities 命名空间。要重新生成就跑：
+ * 本模块合并角色表、配色引擎，以及引擎依赖的 Material Color Utilities 命名空间，
+ * 三者必须彼此一致。重新生成时执行：
  *
  *   node build/bundle-host.mjs
  */

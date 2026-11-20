@@ -1,20 +1,20 @@
 /**
  * 构建期的调色板生成器。
  *
- * 读 `vendor/material-color-utilities` 里那份 vendored 的 Material Color Utilities，
- * 生成 `src/generated/palettes.js`：一个普通 JavaScript 模块，装着本插件在不问操作系统
- * 的前提下能显示的全部配色。于是 Client 半边既不用带色彩库，选预设时也不用往返 Host。
+ * 读取 `vendor/material-color-utilities` 中 vendored 的 Material Color Utilities，
+ * 生成 `src/generated/palettes.js`：一个普通 JavaScript 模块，包含插件在不查询操作系统
+ * 的前提下可显示的全部配色。Client 端据此无需携带色彩库，切换预设也无需与 Host 往返。
  *
  *   node build/generate-palettes.mjs
  *
- * 自动模式（"跟随系统强调色"）不在这里生成：那是 Host 半边运行时从操作系统推出来的。
- * 这里只覆盖设置页手动模式提供的那 8 个 Material 3 预设。
+ * 自动模式（跟随系统强调色）不在此生成，其配色由 Host 端在运行时从操作系统推导。
+ * 本脚本仅覆盖设置页手动模式提供的 8 个 Material 3 预设。
  *
- * 产物的形状是刻意压紧的——每套配色存成一条十六进制字符串（45 个角色 × 6 位，按 ROLES
- * 顺序，去掉每项开头的 `#`）。
+ * 产物采用紧凑格式：每套配色编码为一条十六进制字符串，包含 45 个角色 × 6 位，
+ * 按 ROLES 顺序排列，并去掉每个颜色值开头的 `#`。
  *
- * vendored 的那份是 Material Color Utilities v0.4.0，相对 import 都补上了 `.js`；详见
- * vendor/material-color-utilities/README.md 与 build/vendor-mcu.mjs。
+ * vendored 副本为 Material Color Utilities v0.4.0，相对 import 均已补上 `.js` 后缀；
+ * 详见 vendor/material-color-utilities/README.md 与 build/vendor-mcu.mjs。
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -52,18 +52,18 @@ const CONTRAST_PAIRS = [
   ['onWarningContainer', 'warningContainer'],
 ];
 
-/** 压在表面上的正文要 4.5:1，其余的只要能分辨出来。 */
+/** 表面上正文的最小对比度为 4.5:1，其余配对为 3:1。 */
 const MIN_CONTRAST = {
   onSurface: 4.5,
   onSurfaceVariant: 3,
 };
 
 /**
- * 每一种容器色上都必须看得清的正文。
+ * 需在每一种容器色上保持可读的正文配对。
  *
- * `label-tertiary` 是产品里用得最多的次要墨色，它会压在卡片、菜单和选中行填充上，
- * 不只压在页面底色上。Material 3 对这些地方都要求 4.5:1，所以每套配色要对着全部
- * 容器色验一遍，而不是只对 `surface`。
+ * `label-tertiary` 是产品中使用最多的次要文字颜色，除页面底色外，还用于卡片、菜单
+ * 和选中行填充。Material 3 要求这些场景的对比度不低于 4.5:1，因此每套配色须对
+ * 全部容器色逐一校验，而非仅校验 `surface`。
  */
 const TEXT_CONTRAST_PAIRS = [
   ['onSurfaceVariant', 'surface'],
@@ -76,7 +76,7 @@ const TEXT_CONTRAST_PAIRS = [
   ['onSecondaryContainer', 'secondaryContainer'],
 ];
 
-/** 正文对比度下限，上面每一对都按它判。 */
+/** 正文配对的最小对比度，所有 TEXT_CONTRAST_PAIRS 均按此值校验。 */
 const MIN_TEXT_CONTRAST = 4.5;
 
 const ALL_ROLES = [...ROLE_ORDER, 'surfaceTint', ...FIXED_ROLE_ORDER];
@@ -123,18 +123,19 @@ function buildPalettes() {
 const palettes = buildPalettes();
 
 const banner = `/**
- * 由 build/generate-palettes.mjs 生成，不要手改。
+ * 由 build/generate-palettes.mjs 生成，请勿手动修改。
  *
- * 每套配色就是一条十六进制字符串：45 个角色 × 6 位，按 ROLES 顺序排，去掉每项开头
- * 的 "#"。取值时按角色切一段，所以发出去的 Client 半边不需要色彩库。要重新生成就跑：
+ * 每套配色编码为一条十六进制字符串，包含 45 个角色 × 6 位，按 ROLES 顺序排列，
+ * 并去掉每个颜色值开头的 "#"。取值时按角色截取对应片段，因此 Client 端无需携带色彩库。
+ * 重新生成时执行：
  *
  *   node build/generate-palettes.mjs
  *
- * \`PRESET_TABLE\` 按预设 id 索引，明暗两套都在里面。预设清单（id、种子色、显示名）
- * 放在 \`src/parts/palette-spec.js\`，这样设置页和这份产物不会在"有哪些预设"上打架。
+ * \`PRESET_TABLE\` 按预设 id 索引，包含明暗两套配色。预设清单（id、种子色、显示名）
+ * 定义在 \`src/parts/palette-spec.js\`，设置页与本产物共用该定义，避免预设集合不一致。
  *
- * 内容是 ${PRESETS.length} 个 Material 3 预设 × 2 套方案 = ${PRESETS.length * 2} 套配色、每套 ${ALL_ROLES.length} 个角色，
- * 全部由单一的 "${VARIANT_ID}"（${VARIANT_CLASS}）调和方式推导。
+ * 共包含 ${PRESETS.length} 个 Material 3 预设 × 2 套方案 = ${PRESETS.length * 2} 套配色，每套 ${ALL_ROLES.length} 个角色，
+ * 全部由单一 "${VARIANT_ID}"（${VARIANT_CLASS}）调和方式推导。
  */`;
 
 const body = `${banner}

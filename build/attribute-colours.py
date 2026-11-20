@@ -1,8 +1,6 @@
-"""把 DSH 截图里每一块大面积平色归到确切的 Material 3 角色上，并证明原装 DSH 调色板
+"""统计截图中大面积平色对应的 Material 3 角色，以及原装调色板的残留像素量。
 
-已经不在画面里。
-只读：给一个 PNG 路径，加上 build/print-palette.mjs 打印出的配色表，它就报映射关系。不会
-碰运行中的应用。
+参数依次为截图路径、build/print-palette.mjs 输出的配色表路径。
 """
 
 from __future__ import annotations
@@ -13,7 +11,7 @@ from collections import Counter
 from PIL import Image
 
 STOCK = {
-    # design-platform.css 里深色主题以下、原装浅色主题发的值
+    # design-platform.css 中原装浅色主题定义的颜色值（深色主题下会被覆盖）
     "neutral-bluish-00": (0xFF, 0xFF, 0xFF),
     "neutral-bluish-50": (0xF9, 0xFA, 0xFB),
     "neutral-bluish-75": (0xF1, 0xF3, 0xF5),
@@ -49,7 +47,7 @@ def main() -> int:
     print(f"图片 {image.size[0]}x{image.size[1]}（{total} px）\n")
 
     matched_px = 0
-    print("-- 正好等于某个 Material 3 角色的平色 --")
+    print("-- 与某个 Material 3 角色完全一致的平色 --")
     for rgb, n in counts.most_common(40):
         roles = role_by_hex.get(rgb)
         if roles is None:
@@ -60,7 +58,7 @@ def main() -> int:
 
     print(f"\nMaterial 3 角色像素：{matched_px}（{100.0 * matched_px / total:.2f}%）\n")
 
-    print("-- 还在画面上的原装 DSH 颜色 --")
+    print("-- 截图中残留的原装 DSH 颜色 --")
     remaining = 0
     for name, rgb in STOCK.items():
         n = counts.get(rgb, 0)
@@ -68,7 +66,7 @@ def main() -> int:
         print(f"  {name:<22} {hexs(rgb)}  {n:>8} px")
     print(f"\n原装调色板像素：{remaining}（{100.0 * remaining / total:.2f}%）")
 
-    print("\n-- 占屏 1% 以上、又对不上任何角色的颜色 --")
+    print("\n-- 占屏 1% 以上且不属于任何角色的颜色 --")
     for rgb, n in counts.most_common(40):
         share = 100.0 * n / total
         if share < 1.0 or rgb in role_by_hex:
