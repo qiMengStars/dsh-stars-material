@@ -1,33 +1,26 @@
 /**
- * Client half of the Material 3 theme bundle.
+ * 主题包的 Client 半边。
  *
- * What it does, in the order it runs:
+ * 按运行顺序，它做了这些事：
  *
- *   1. Reads the stored preference (enabled / colour source / preset).
- *   2. Resolves the palette for the active colour source. Manual mode slices
- *      the build-time preset table; automatic mode asks the Host half for the
- *      operating system accent colour and the palette derived from it, so no
- *      colour library has to run in the browser.
- *   3. Derives one flat `Record<token, { light, dark }>` from that palette — a
- *      pure function: no DOM, no clock, no randomness.
- *   4. Installs the layers:
- *        a. `theme.overrideTokens(source, tokens)` — every themed token. Layers
- *           stack per token over whatever theme is active, so this keeps working
- *           on top of the built-in palettes and of third-party themes without
- *           fighting them for the preference.
- *        b. `theme.register()` for `stars-material-light` / `stars-material-dark` — so
- *           the theme is visible to `getTheme().themes` and selectable through
- *           `setTheme` like any other registered theme.
- *        c. `--dsh-m3-*` bridge properties on `:root`, so the stylesheet can
- *           name a role without repeating the palette.
- *   5. Adds one `<style>` element for the values the token registry cannot
- *      express: the shape scale, the motion curves, the paint that used to come
- *      from a border colour, and the strokes Material 3 does not draw.
- *   6. Contributes a settings page.
+ *   1. 读出存档的偏好（是否启用 / 取色来源 / 预设）。
+ *   2. 为当前取色来源解析配色。手动模式直接切构建期那张预设表；自动模式向 Host
+ *      半边要操作系统强调色以及由它推导的配色，于是浏览器里不用跑任何色彩库。
+ *   3. 从这份配色推导出一张扁平的 `Record<token, { light, dark }>`——纯函数，不碰
+ *      DOM、不看时钟、不用随机数。
+ *   4. 装上几层：
+ *        a. `theme.overrideTokens(source, tokens)`——逐令牌换色。层是按令牌叠在当
+ *           前主题之上的，所以它既盖得住内置配色，也不用和第三方主题争偏好。
+ *        b. `theme.register()` 注册 `stars-material-light` / `stars-material-dark`——
+ *           让主题出现在 `getTheme().themes` 里，能像别的主题一样被 `setTheme` 选中。
+ *        c. `:root` 上的 `--dsh-m3-*` 桥接属性，样式表就能按角色取色而不必再抄一遍
+ *           配色。
+ *   5. 注入一个 `<style>`，装令牌注册表表达不了的东西：形状刻度、缓动曲线、原本
+ *      由边框色提供的颜料，以及 Material 3 不画的描边。
+ *   6. 提供一个设置页。
  *
- * The Client bundle must not `require` a Harness client package, so React is
- * the only runtime import and every control below is a plain element styled
- * with the `--dsw-alias-*` tokens the host already publishes.
+ * Client 包不能 `require` Harness 的客户端包，所以运行时只 import React，下面每个
+ * 控件都是普通元素，靠宿主已经发布的 `--dsw-alias-*` 令牌上样式。
  */
 
 const NS = 'dsh-stars-material';
@@ -42,15 +35,14 @@ const STORAGE_SOURCE = STORAGE_PREFIX + 'source';
 const STORAGE_PRESET = STORAGE_PREFIX + 'preset';
 
 /**
- * Keys this plugin wrote before it was renamed to `dsh-stars-material`.
+ * 插件改名成 `dsh-stars-material` 之前写下的键。
  *
- * They are only ever read, never written again: a profile that already had a
- * preference keeps it across the rename, and the first change copies the value
- * to the new key. Without this a rename silently resets everyone's settings.
+ * 这些键只读、不再写：已经存过偏好的 profile 跨过改名仍然保留，第一次改动才把值
+ * 抄到新键上。没有这段，一次改名就会悄悄清掉所有人的设置。
  */
 const LEGACY_PREFIX = 'dsh.material-3.';
 
-/** `system` follows the OS accent colour; `preset` pins one Material 3 seed. */
+/** `system` 跟随系统强调色；`preset` 固定用某一个 Material 3 种子色。 */
 const SOURCE_SYSTEM = 'system';
 const SOURCE_PRESET = 'preset';
 
@@ -59,29 +51,29 @@ const SETTINGS_SECTION_ORDER = 26;
 
 const STYLE_TAG_ID = NS + '/stars-material.css';
 
-/** Host route that answers with the OS accent colour and its palette. */
+/** Host 路由：返回系统强调色和由它推导的配色。 */
 const HOST_PALETTE_ROUTE = '/stars-material/palette';
 
-/** A Host round trip that has not answered by now is not worth waiting for. */
+/** 一次 Host 往返到这时还没答复，就不值得再等了。 */
 const HOST_TIMEOUT_MS = 1500;
 
-/** Retry schedule for the accent-colour question, in milliseconds. */
+/** 追问强调色的重试时刻表，单位毫秒。 */
 const HOST_RETRY_MS = [0, 2000, 6000, 15000];
 
 const ROLE_INDEX = new Map(ROLES.map((role, index) => [role, index]));
 const PRESET_INDEX = new Map(PRESETS.map((preset) => [preset.id, preset]));
 
-/** `#rrggbb` for one role out of a packed palette string. */
+/** 从压缩的配色串里取一个角色的 `#rrggbb`。 */
 function unpackRole(packed, role) {
   const index = ROLE_INDEX.get(role);
   if (index === undefined) {
-    throw new Error('Material 3 theme: unknown role "' + role + '"');
+    throw new Error('Material 3 主题：没有叫 "' + role + '" 的角色');
   }
   const start = index * 6;
   return '#' + packed.slice(start, start + 6);
 }
 
-/** `#rrggbbaa` for one role out of a packed palette string. */
+/** 从压缩的配色串里取一个角色的 `#rrggbbaa`。 */
 function unpackRoleAlpha(packed, role, alpha) {
   const byte = Math.round(Math.min(Math.max(alpha, 0), 1) * 255);
   return unpackRole(packed, role) + byte.toString(16).padStart(2, '0');
@@ -95,29 +87,27 @@ function clampSource(source) {
   return source === SOURCE_SYSTEM ? SOURCE_SYSTEM : SOURCE_PRESET;
 }
 
-/** The build-time palette for a preset id. */
+/** 某个预设 id 在构建期算好的配色。 */
 function presetPalette(preset) {
   return PRESET_TABLE[clampPreset(preset)];
 }
 
 /**
- * Every value in the map is either a literal or a `color-mix()` over two
- * literals, so the browser resolves derived colours itself and the shipped
- * script still needs no colour library.
+ * 表里每个值要么是字面量，要么是对两个字面量的 `color-mix()`，所以派生色由浏览器
+ * 自己算，发出去的脚本仍然不需要色彩库。
  */
 function mixExpression(first, into, weight) {
   return 'color-mix(in srgb, ' + first + ' ' + weight + '%, ' + into + ')';
 }
 
 /**
- * Build the complete token map for one palette.
+ * 为一份配色建出完整的令牌表。
  *
- * Pure data: identical inputs always produce an identical map, which is what
- * lets `overrideTokens` be re-called on every preference change.
+ * 纯数据：同样的输入永远得到同样的表，所以每次偏好变化都可以重调
+ * `overrideTokens`。
  *
- * `palette` is `{ light, dark }`, each a packed role string. Both the preset
- * table and the Host answer use that shape, so this function does not care
- * where the palette came from.
+ * `palette` 是 `{ light, dark }`，各是一条压缩过的角色串。预设表和 Host 的答复都
+ * 是这个形状，所以这里不关心配色是从哪来的。
  */
 function buildTokenMap(palette) {
   const light = palette.light;
@@ -136,7 +126,7 @@ function buildTokenMap(palette) {
 
   for (const [name, value] of Object.entries(LITERAL_TOKENS)) put(name, value, value);
 
-  // Removed strokes and removed shadows are both "this must paint nothing".
+  // 去掉的描边和去掉的阴影都是"这里不许画出任何东西"。
   for (const name of CLEARED_TOKENS) put(name, 'transparent', 'transparent');
 
   for (const [name, spec] of Object.entries(STATE_LAYER_TOKENS)) {
@@ -185,20 +175,19 @@ function buildTokenMap(palette) {
     );
   }
 
-  // The elevation composites paint a 0.5dp stroke plus two soft glows. Material
-  // 3 expresses elevation with tone alone, so all five resolve to nothing.
+  // 高程组合值会画一道 0.5dp 描边加两层极淡光晕。Material 3 只靠色调表达高程，
+  // 所以这七个全部解析成空。
   for (const name of ELEVATION_TOKENS) put(name, 'none', 'none');
 
   return tokens;
 }
 
 /**
- * The stylesheet-side bridge.
+ * 给样式表用的桥。
  *
- * The sheet cannot call `unpackRole`, so the resolved value of each bridged role
- * is published as a custom property. Both schemes are published through
- * `light-dark()`, which is the one CSS primitive that can carry a two-scheme
- * value through a single property.
+ * 样式表调不到 `unpackRole`，所以每个要过桥的角色都把解析好的值发布成自定义属性。
+ * 明暗两套都靠 `light-dark()` 塞进去——这是 CSS 里唯一能把双方案的值装进单个属性
+ * 的写法。
  */
 function buildBridgeTokens(palette) {
   const out = {};
@@ -213,7 +202,7 @@ function buildBridgeTokens(palette) {
   return out;
 }
 
-/** The subset `theme.register()` carries: product tokens, current scheme only. */
+/** `theme.register()` 能带的那部分：只含产品令牌、只含当前方案。 */
 function productTokens(tokens, colorScheme) {
   const out = {};
   for (const [name, modes] of Object.entries(tokens)) {
@@ -223,7 +212,7 @@ function productTokens(tokens, colorScheme) {
 }
 
 // ---------------------------------------------------------------------------
-// Preference storage
+// 偏好存取
 // ---------------------------------------------------------------------------
 
 function readStorage(key, fallback) {
@@ -236,11 +225,11 @@ function readStorage(key, fallback) {
 }
 
 /**
- * Read one preference, falling back to the pre-rename key.
+ * 读一项偏好，读不到就退回改名前的键。
  *
- * @param {string} key   current key
- * @param {string} legacy equivalent key under the old prefix
- * @param {string} fallback value used when neither key is set
+ * @param {string} key 现在的键
+ * @param {string} legacy 旧前缀下的同一个键
+ * @param {string} fallback 两个键都没设时用的值
  */
 function readPreference(key, legacy, fallback) {
   const current = readStorage(key, null);
@@ -252,7 +241,7 @@ function writeStorage(key, value) {
   try {
     window.localStorage.setItem(key, value);
   } catch {
-    // A profile with storage disabled keeps the choice in memory only.
+    // 存储被关掉的 profile 只在内存里保留这次选择。
   }
 }
 
@@ -267,16 +256,14 @@ function readPreferences() {
 }
 
 // ---------------------------------------------------------------------------
-// Palette resolution
+// 配色解析
 // ---------------------------------------------------------------------------
 
 /**
- * Ask the Host half for the operating system accent colour.
+ * 向 Host 半边要操作系统强调色。
  *
- * The Host owns this because reading a registry value needs a child process and
- * a colour library, neither of which belongs in a browser bundle. A failure is
- * normal (no accent colour configured, a non-Windows build, a blocked child
- * process) and only downgrades the theme to the preset palette.
+ * 这件事归 Host：读注册表要起子进程，还要一个色彩库，两样都不该进浏览器包。失败是
+ * 正常的（没设强调色、不是 Windows、子进程被拦），代价只是配色退回预设。
  */
 async function fetchSystemPalette() {
   const controller = new AbortController();
@@ -295,7 +282,7 @@ async function fetchSystemPalette() {
 }
 
 // ---------------------------------------------------------------------------
-// Stylesheet
+// 样式表
 // ---------------------------------------------------------------------------
 
 const SETTINGS_STYLE = `
@@ -330,7 +317,7 @@ const SETTINGS_STYLE = `
   gap: 8px;
   display: inline-flex;
   border: 0;
-  /* Material 3 chips are 8dp rounded rectangles, not capsules. */
+  /* Material 3 的 chip 是 8dp 圆角矩形，不是胶囊。 */
   border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
@@ -387,15 +374,13 @@ const SETTINGS_STYLE = `
 `;
 
 /**
- * Insert (or refresh) the package stylesheet.
+ * 插入（或刷新）本包的样式表。
  *
- * The loader hands every bundle a `styles` builtin for exactly this. When it is
- * missing (an older host), one `<style>` element in `<head>` is the documented
- * fallback — never `document.body`, and never a second tag.
+ * 加载器给每个包发了 `styles` builtin 就是干这个的。它缺失时（老版本宿主）按文档
+ * 退回 `<head>` 里的一个 `<style>` 元素——不碰 `document.body`，也不插第二个标签。
  *
- * The settings page rules are always present; the theme rules (shape scale,
- * motion curves, de-bordering, bridge consumers) are only included while the
- * theme is enabled, so switching it off really does restore the previous look.
+ * 设置页的规则一直在；主题规则（形状刻度、缓动曲线、去描边、桥接变量的使用方）只在
+ * 主题开启时写进去，所以关掉它是真的恢复原样。
  */
 function installStyles() {
   const selector = 'style[data-plugin-css=' + JSON.stringify(STYLE_TAG_ID) + ']';
@@ -419,7 +404,7 @@ function installStyles() {
 }
 
 // ---------------------------------------------------------------------------
-// Settings page
+// 设置页
 // ---------------------------------------------------------------------------
 
 function Chip(props) {
@@ -534,12 +519,10 @@ function Material3SettingsPage(props) {
 }
 
 /**
- * The line under the colour-source title.
+ * 取色来源标题下面那行说明。
  *
- * Automatic mode has three states worth telling apart: the OS colour was read,
- * the OS colour was read but the palette could not be derived, or the OS colour
- * was not available at all. Saying which one is active avoids the "why is my
- * theme purple" question.
+ * 自动模式有三种值得分开说的情况：读到了系统颜色；读到了但配色推不出来；系统颜色压
+ * 根拿不到。说清是哪一种，能省掉"我的主题怎么是紫的"这类疑问。
  */
 function describeSystem(state, t) {
   if (state.systemSeed === null || state.systemSeed === undefined) return t('page.systemUnavailable');
@@ -547,15 +530,14 @@ function describeSystem(state, t) {
 }
 
 // ---------------------------------------------------------------------------
-// Theme layers
+// 主题层
 // ---------------------------------------------------------------------------
 
 /**
- * Install every theme layer for one resolved palette.
+ * 为一份已经解析好的配色装上全部主题层。
  *
- * Returns a disposer that removes exactly what this call added. `register()`
- * rejects a duplicate id, so a retune must always dispose before re-registering
- * — which is why this is the only place that touches the registry.
+ * 返回的清理函数只移除这次调用加的东西。`register()` 不接受重复 id，所以换配色时
+ * 必须先清理再注册——这也是为什么碰注册表的只有这一处。
  */
 function createThemeLayers(theme, enabled, palette) {
   if (!enabled) {
@@ -570,8 +552,7 @@ function createThemeLayers(theme, enabled, palette) {
     disposers.push(theme.overrideTokens(SOURCE, tokens));
   }
 
-  // Bridge properties go through the same override machinery, so they are
-  // removed and restacked exactly like the token layer.
+  // 桥接属性走同一套覆盖机制，所以它们和令牌层一样被移除、被重新叠加。
   if (typeof theme.overrideTokens === 'function') {
     const pairs = {};
     for (const [name, value] of Object.entries(bridge)) {
@@ -591,9 +572,8 @@ function createThemeLayers(theme, enabled, palette) {
           theme.register({ id, colorScheme, tokens: productTokens(tokens, colorScheme) }),
         );
       } catch (error) {
-        // A stale registration from an earlier generation is not fatal: the
-        // override layer is what colours the UI.
-        console.error('Material 3 theme: could not register ' + id, error);
+        // 上一次运行残留的注册不是致命的：真正给界面上色的是覆盖层。
+        console.error('Material 3 主题：注册 ' + id + ' 失败', error);
       }
     }
   }
@@ -605,7 +585,7 @@ function createThemeLayers(theme, enabled, palette) {
         try {
           dispose();
         } catch (error) {
-          console.error('Material 3 theme: layer cleanup failed', error);
+          console.error('Material 3 主题：清理主题层失败', error);
         }
       }
     },
@@ -613,13 +593,13 @@ function createThemeLayers(theme, enabled, palette) {
 }
 
 // ---------------------------------------------------------------------------
-// Plugin entry
+// 插件入口
 // ---------------------------------------------------------------------------
 
 function applyClient(ctx) {
   const theme = ctx.get('theme');
   if (theme === undefined) {
-    console.error('Material 3 theme: the "theme" service is unavailable');
+    console.error('Material 3 主题：拿不到 "theme" 服务');
     return;
   }
 
@@ -644,9 +624,8 @@ function applyClient(ctx) {
     revision: 0,
   };
 
-  /** Palette in use right now. Preset mode knows it up front; system mode starts
-   *  from the baseline so the UI is themed on the first frame and upgrades when
-   *  the Host answers. */
+  /** 此刻正在用的配色。预设模式一开始就知道；自动模式先拿基准配色，让首帧就已经
+   *  上了主题，等 Host 答复再换掉。 */
   let resolved = preference.source === SOURCE_PRESET
     ? presetPalette(preference.preset)
     : presetPalette(DEFAULT_PRESET);
@@ -657,7 +636,7 @@ function applyClient(ctx) {
   }, NS + ' stylesheet');
   styles.apply(preference.enabled);
 
-  /** Layers in place right now; replaced wholesale on every retune. */
+  /** 此刻生效的主题层；每次换配色都整套替换。 */
   let layers = { dispose() {} };
 
   ctx.effect(() => {
@@ -674,7 +653,7 @@ function applyClient(ctx) {
     published.revision += 1;
   };
 
-  /** Re-install every layer for the current preference. */
+  /** 按当前偏好重新装一遍所有层。 */
   const install = () => {
     layers.dispose();
     layers = createThemeLayers(theme, preference.enabled && resolved !== null, resolved);
@@ -682,7 +661,7 @@ function applyClient(ctx) {
     publish();
   };
 
-  /** Handle of the pending accent-colour retry, so a retune can cancel it. */
+  /** 正在等待的那次重试的句柄，好让换配色时能取消它。 */
   let retryTimer = null;
 
   const cancelRetry = () => {
@@ -693,14 +672,11 @@ function applyClient(ctx) {
   };
 
   /**
-   * Ask the Host for the accent palette, retrying a few times.
+   * 向 Host 要强调色配色，失败就重试几次。
    *
-   * The Host route is registered while the Host half loads, and a page can be
-   * ready before that happens — a slow first boot, or a reload that runs the
-   * new Client against the previous Host generation. One failed attempt must not
-   * pin the theme to the baseline palette for the rest of the session, so the
-   * question is repeated on a short backoff before the fallback is accepted as
-   * final.
+   * Host 路由是在 Host 半边加载时才注册的，而页面可能比它先就绪——首次启动慢，或者
+   * 刷新后新的 Client 撞上上一代 Host。一次失败不该让整个会话都固定在基准配色上，
+   * 所以在认可回退之前，会按一个短的退避节奏再问几次。
    */
   const resolveSystem = async (attempt) => {
     retryTimer = null;
@@ -718,16 +694,16 @@ function applyClient(ctx) {
         }, HOST_RETRY_MS[next]);
         return;
       }
-      // Falling back keeps the theme usable: the Material baseline palette is
-      // still a correct Material 3 palette, just not the user's own colour.
-      console.warn('Material 3 theme: system accent colour unavailable, using baseline', error);
+      // 回退之后主题照样能用：Material 基准配色本身也是正确的 M3 配色，只是不是
+      // 用户自己的颜色。
+      console.warn('Material 3 主题：取不到系统强调色，改用基准配色', error);
       resolved = presetPalette(DEFAULT_PRESET);
       published.systemSeed = null;
       install();
     }
   };
 
-  /** Resolve the palette for `preference.source`, then install it. */
+  /** 按 `preference.source` 解析配色，然后装上。 */
   const resolve = async () => {
     cancelRetry();
     if (preference.source === SOURCE_PRESET) {
@@ -753,8 +729,8 @@ function applyClient(ctx) {
       return;
     }
 
-    // Automatic mode needs a Host round trip; the layers stay as they are until
-    // it answers so the UI never flashes an unstyled frame.
+    // 自动模式要走一次 Host 往返；在它答复之前保持现有主题层，界面就不会闪出一帧
+    // 没上色的样子。
     published.source = preference.source;
     published.preset = preference.preset;
     published.enabled = preference.enabled;
@@ -796,7 +772,7 @@ function applyClient(ctx) {
 
   ctx.effect(() => () => cancelRetry(), NS + ' palette retry');
 
-  // Automatic mode is the default, so the first resolution runs on load.
+  // 自动模式是默认值，所以加载时就先解析一次。
   void resolve();
 }
 const DICTS = {

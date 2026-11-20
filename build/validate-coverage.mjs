@@ -1,25 +1,14 @@
 /**
- * Coverage check: every colour token the product actually reads must be
- * produced by the plugin, and the plugin must not invent a token that exists
- * nowhere.
+ * 检查插件是否给产品会读的每个 token 都上了色，且没有声明任何实际不存在的 token。
  *
  *   node build/validate-coverage.mjs
  *
- * Two sets are compared:
+ * 这里比对两个集合。产品 token 是 `design-platform.css` 里被赋值的名字；漏一个，界面
+ * 那一部分就还是原装颜色。声明名是任意 vendored 样式表里被赋值的每个 `--dsw-*`；声明
+ * 一个哪儿都找不到的名字，要么是笔误，要么是一次我们还没跟上的改名。
  *
- *   - "product tokens" — the names assigned by `design-platform.css`, the sole
- *     colour authority. Missing one means the plugin forgets to recolour
- *     something; the base DSH colour shows through.
- *   - "declared names" — every `--dsw-*` name assigned by any vendored sheet.
- *     Claiming a name that appears nowhere means the plugin writes a variable
- *     nothing reads, usually a typo.
- *
- * The sheets are vendored under `vendor/dsh-survey/` (see
- * `build/vendor-survey.mjs`) so this check keeps working with no access to the
- * installed archive.
- *
- * Exits non-zero when either side is out of sync, so a future DSH release that
- * renames a token fails loudly instead of degrading silently.
+ * 两边只要有一边对不上就以非零码退出，于是新版 DSH 里的一次改名会在这里失败，而不是
+ * 变成界面上某个永远不变的颜色。
  */
 
 import { readFile } from 'node:fs/promises';
@@ -42,10 +31,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
 const SURVEY = resolve(REPO, 'vendor/dsh-survey');
 
-/** The colour authority: the only sheet whose full name set must be covered. */
+/** 颜色权威：只有这张表的完整名字集合必须被覆盖。 */
 const COLOUR_SHEET = resolve(SURVEY, 'design-platform.css');
 
-/** Every sheet, used to decide whether a claimed name exists at all. */
+/** 全部样式表，用来判断一个被声明的名字到底存不存在。 */
 const ALL_SHEETS = [
   'design-platform.css',
   'base.css',
@@ -53,10 +42,10 @@ const ALL_SHEETS = [
   'gradient-shadow-text.css',
 ].map((name) => resolve(SURVEY, name));
 
-/** Names the product reads but no vendored sheet assigns (they rely on a fallback). */
+/** 产品会读、但没有任何 vendored 样式表给它赋值的名字（它们靠 fallback 生效）。 */
 const REFERENCED_ONLY = new Set(['--dsw-alias-border-selected']);
 
-/** Names assigned in the given sources, minus the raw `--dsw-static-*` ramps. */
+/** 给定来源里被赋值的名字，去掉 `--dsw-static-*` 那几组原始色阶。 */
 function declaredNames(sources) {
   const names = new Set();
   for (const source of sources) {
@@ -88,8 +77,8 @@ const invented = [...owned].filter((name) => !everywhere.has(name)).sort();
 
 console.log(`product tokens: ${product.length}`);
 console.log(`owned tokens:   ${owned.size}`);
-console.log(`missing (${missing.length}): ${missing.join(', ') || 'none'}`);
-console.log(`invented (${invented.length}): ${invented.join(', ') || 'none'}`);
+console.log(`missing (${missing.length}): ${missing.join(', ') || '无'}`);
+console.log(`invented (${invented.length}): ${invented.join(', ') || '无'}`);
 
 if (missing.length > 0 || invented.length > 0) {
   process.exitCode = 1;

@@ -1,9 +1,8 @@
-// Print the full role -> hex table for one palette, so screen colours found in
-// a screenshot can be attributed to an exact Material 3 role.
+// 打印一份配色的完整「角色 → 十六进制」表，用来把截图里的某个颜色归到确切的
+// Material 3 角色上。
 //
-// It reads the shipped Host engine rather than the generated preset table, so a
-// seed that only the running harness knows (the OS accent colour) can be dumped
-// with the same code path the product uses.
+// 它读的是随包发出去的 Host 引擎，而不是生成的预设表，所以只有运行中的 harness 才知道
+// 的种子色（系统强调色）也能用产品同一条代码路径导出来。
 //
 //   node build/print-palette.mjs '#6750a4' light
 //   node build/print-palette.mjs baseline dark
@@ -23,7 +22,7 @@ const scheme = process.argv[3] ?? 'light';
 const known = new Map(spec.PRESETS.map((preset) => [preset.id, preset.hex]));
 const seed = known.get(requested) ?? requested;
 if (!/^#[0-9a-f]{6}$/iu.test(seed)) {
-  process.stderr.write(`not a preset id or #rrggbb seed: ${requested}\n`);
+  process.stderr.write(`既不是预设 id 也不是 #rrggbb 种子色：${requested}\n`);
   process.exit(1);
 }
 

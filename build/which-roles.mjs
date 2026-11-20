@@ -1,10 +1,9 @@
 /**
- * Print which Material 3 roles the token tables actually reference.
+ * 打印令牌表实际引用了哪些 Material 3 角色。
  *
- * A development aid, not a pipeline step: `build/validate-coverage.mjs` is what
- * enforces coverage. Use this when adding a role to `palette-spec.js` and you
- * want to know whether anything consumes it, or when a role is dropped and some
- * table still points at it.
+ * 这是开发时的小工具，不是流水线的一步：真正管覆盖的是
+ * `build/validate-coverage.mjs`。往 `palette-spec.js` 里加角色时想知道有没有东西用它，
+ * 或者删角色时想知道还有没有表指着它，就用这个。
  *
  *   node build/which-roles.mjs
  */
@@ -49,7 +48,7 @@ const unknown = [...roles].filter((role) => !known.includes(role));
 const ordered = known.filter((role) => roles.has(role));
 const unused = known.filter((role) => !roles.has(role));
 
-console.log('roles referenced: ', roles.size);
-console.log('kept (ordered):   ', ordered.length);
-console.log('unused:           ', unused.length ? unused.join(', ') : 'none');
-console.log('unknown:          ', unknown.length ? unknown.join(', ') : 'none');
+console.log('被引用角色数：', roles.size);
+console.log('保留（按顺序）：', ordered.length);
+console.log('没用到：', unused.length ? unused.join('、') : '无');
+console.log('不认识的：', unknown.length ? unknown.join('、') : '无');

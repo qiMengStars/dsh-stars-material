@@ -1,10 +1,9 @@
-"""Confirm the dimmed background in a DSH screenshot is the Material 3 scrim.
+"""确认 DSH 截图里被压暗的背景确实是 Material 3 的 scrim。
 
-The plugin maps --dsw-alias-bg-mask-1 to scrim at 32% alpha. If the theme is
-live, every dimmed surface must be exactly scrim-over-surface, so this script
-recomposites the palette and looks for those blends.
-
-Read-only: reads a PNG plus the palette table, never the running app.
+插件把 --dsw-alias-bg-mask-1 映射成 32% alpha 的 scrim。如果主题真的在跑，每一处被压暗的
+表面都必须正好是 scrim 叠在某个表面色上的结果，所以这个脚本按配色表重新合成一遍，找那些
+混色值。
+只读：给一个 PNG 加一份配色表，不碰运行中的应用。
 """
 
 from __future__ import annotations
@@ -39,11 +38,11 @@ def main() -> int:
     counts = Counter(image.get_flattened_data())
     total = image.size[0] * image.size[1]
 
-    print(f"image {image.size[0]}x{image.size[1]} ({total} px)")
-    print(f"scrim alpha under test: {ALPHA}\n")
+    print(f"图片 {image.size[0]}x{image.size[1]}（{total} px）")
+    print(f"按 {ALPHA} 的 scrim 不透明度检验\n")
 
     matches = 0
-    print("-- dimmed surfaces (scrim over a Material 3 role) --")
+    print("-- 被压暗的表面（scrim 叠在某个 Material 3 角色上）--")
     for role, rgb in roles:
         blended = tuple(round((1 - ALPHA) * channel) for channel in rgb)
         n = counts.get(blended, 0)
@@ -52,10 +51,10 @@ def main() -> int:
         matches += n
         print(
             f"  {hexs(blended)}  {n:>8} px  {100.0 * n / total:5.2f}%"
-            f"  = scrim over {role} {hexs(rgb)}"
+            f"  = scrim 叠在 {role} {hexs(rgb)} 上"
         )
 
-    print(f"\ndimmed Material 3 pixels: {matches} ({100.0 * matches / total:.2f}%)")
+    print(f"\n被压暗的 Material 3 像素：{matches}（{100.0 * matches / total:.2f}%）")
     return 0
 
 

@@ -1,18 +1,16 @@
 /**
- * Re-extract the vendored DSH token sheets from the installed app.asar.
+ * 从已安装的 app.asar 里重新抽出 vendored 的 DSH 令牌样式表。
  *
  *   node build/vendor-survey.mjs <path-to-app.asar>
  *
- * The source is your installed DeepSeek Harness build, so it has to be named on
- * the command line (or in `DSH_ASAR`); there is no default that would work on
- * another machine. The extracted files land in `vendor/dsh-survey/` and are read
- * by `build/validate-coverage.mjs`, so the coverage gate keeps working without a
- * shell that can read inside the archive.
+ * 源头是你自己装的那份 DeepSeek Harness，所以必须在命令行里给出（或放进 `DSH_ASAR`），
+ * 没有哪个默认值在别人的机器上是对的。抽出来的文件落在 `vendor/dsh-survey/`，由
+ * `build/validate-coverage.mjs` 读取，这样覆盖门禁不需要一个能读压缩包内部的 shell 也能
+ * 跑。
  *
- * ASAR layout (pickled header): `headerSize` is a little-endian uint32 at byte
- * 12, the JSON directory starts at byte 16, and the payload starts at
- * `16 + ceil(headerSize / 4) * 4`. Entries without a numeric `size`/`offset`
- * are links, not files, and must be skipped.
+ * ASAR 的结构（pickled 头）：`headerSize` 在偏移 12 处，是小端 uint32；JSON 目录从偏移
+ * 16 开始；正文从 `16 + ceil(headerSize / 4) * 4` 开始。没有数值 `size`/`offset` 的条目
+ * 是链接不是文件，要跳过。
  */
 
 import { open, mkdir, writeFile } from 'node:fs/promises';
@@ -23,43 +21,39 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
 const OUT_DIR = resolve(REPO, 'vendor/dsh-survey');
 
-// Where the installed Harness keeps its bundle. Pass it as the first argument or
-// set DSH_ASAR; there is no sensible default because the install path differs per
-// machine.
+// 已安装的 Harness 把包放在哪，各机器不同。把路径作为第一个参数传进来，或设 DSH_ASAR。
 const DEFAULT_ASAR = process.env.DSH_ASAR ?? '';
 
-/** Files copied out verbatim, with the reason each one is worth keeping. */
+/** 原样抄出来的文件，以及每个为什么值得留。 */
 const TARGETS = [
   {
     name: 'design-platform.css',
     match: (path) => path.endsWith('dsh-client-ui-theme/src/styles/design-platform.css'),
-    why: 'Sole colour authority: every --dsw-* colour token, light and dark.',
+    why: '唯一的颜色权威：明暗两套的全部 --dsw-* 颜色令牌。',
   },
   {
     name: 'base.css',
     match: (path) => path.endsWith('dsh-client-ui-theme/src/styles/base.css'),
-    why: 'Radius scale and font families the shape mapping must agree with.',
+    why: '圆角刻度和字体族，形状映射必须与它一致。',
   },
   {
     name: 'focus.css',
     match: (path) => path.endsWith('dsh-client-ui-theme/src/styles/focus.css'),
-    why: 'Proves --dsw-focus-ring-width is already 2px, i.e. already M3.',
+    why: '证明 --dsw-focus-ring-width 本来就是 2px，也就是本来就符合 M3。',
   },
   {
     name: 'gradient-shadow-text.css',
     match: (path) => path.endsWith('dsh-client-ui-theme/src/styles/gradient-shadow-text.css'),
-    why: 'Declares --dsw-shadow-lv* and --dsw-elevation-*, which no other sheet defines.',
+    why: '声明了 --dsw-shadow-lv* 和 --dsw-elevation-*，别的样式表都没定义它们。',
   },
 ];
 
 /**
- * The licence the extracted sheets travel under.
+ * 抽出来的这几份样式表所遵循的协议。
  *
- * The sheets come from DeepSeek Harness packages, which declare `"license":
- * "MIT"` and carry this text verbatim in their own `LICENSE` file. Copying
- * files without it would be a redistribution without the notice MIT requires,
- * so it is written next to them on every run rather than left to a one-off
- * manual step.
+ * 它们来自 DeepSeek Harness 的包，那些包声明 `"license": "MIT"`，并在自己的 `LICENSE`
+ * 里逐字带着这段文字。只抄文件不抄声明，就成了缺少 MIT 所要求声明的再分发，所以每次运行
+ * 都在旁边重写一份，而不是留给某个一次性的手工步骤。
  */
 const UPSTREAM_LICENCE = `MIT License
 
@@ -98,7 +92,7 @@ async function readAsar(asarPath) {
 
   const dataOffset = 16 + Math.ceil(headerSize / 4) * 4;
 
-  /** Flatten the directory tree into `{ path, offset, size }` file records. */
+  /** 把目录树摊平成 `{ path, offset, size }` 的文件记录。 */
   const files = [];
   const walk = (node, prefix) => {
     for (const [name, entry] of Object.entries(node.files ?? {})) {
@@ -128,7 +122,7 @@ async function readAsar(asarPath) {
 
 const asarPath = resolve(process.argv[2] ?? DEFAULT_ASAR);
 if (asarPath === '') {
-  throw new Error('pass the installed app.asar path, or set DSH_ASAR to it');
+  throw new Error('请传入已安装的 app.asar 路径，或把 DSH_ASAR 设成它');
 }
 const asar = await readAsar(asarPath);
 
@@ -138,7 +132,7 @@ const written = [];
 for (const target of TARGETS) {
   const record = asar.files.find((file) => target.match(file.path));
   if (record === undefined) {
-    throw new Error(`app.asar does not contain ${target.name} (looked for ${target.name})`);
+    throw new Error(`app.asar 里找不到 ${target.name}`);
   }
   const bytes = await asar.read(record);
   await writeFile(join(OUT_DIR, target.name), bytes);
@@ -152,47 +146,41 @@ const rows = TARGETS.map((target, index) => {
   return `| \`${name}\` | ${bytes} | ${target.why} |`;
 }).join('\n');
 
-const readme = `# Vendored DSH token sheets
+const readme = `# 从 DSH 抽出来的令牌样式表
 
-Extracted verbatim from the installed DeepSeek Harness \`app.asar\`. Regenerate
-with:
+从已安装的 DeepSeek Harness \`app.asar\` 里原样取出。要重新生成就跑：
 
 \`\`\`
 node build/vendor-survey.mjs <path-to-app.asar>
 \`\`\`
 
-| File | Bytes | Why it is here |
+| 文件 | 字节 | 为什么要留 |
 | --- | --- | --- |
 ${rows}
 
-\`build/validate-coverage.mjs\` reads all four. \`design-platform.css\` supplies
-the set of colour tokens the product is guaranteed to read (so nothing may be
-missing); the union of all four supplies the set of names that exist at all (so
-nothing may be invented).
+\`build/validate-coverage.mjs\` 四份都读。\`design-platform.css\` 给出产品保证会读的颜色
+令牌集合（所以一个都不能缺）；四份的并集给出真实存在的名字集合（所以一个都不能编）。
 
-## Licence
+## 协议
 
-These sheets are copied from DeepSeek Harness, whose packages are MIT licensed
-(\`Copyright (c) 2026 DeepSeek\`). The notice they require travels with them in
-[LICENSE](LICENSE), which this script rewrites on every run.
+这几份样式表抄自 DeepSeek Harness，它的包是 MIT（\`Copyright (c) 2026 DeepSeek\`）。
+它要求的声明就在旁边的 [LICENSE](LICENSE) 里，每次运行这个脚本都会重写一遍。
 
-## When DSH ships a new frontend build
+## DSH 换了新的前端构建时
 
 1. \`node build/vendor-survey.mjs <path-to-app.asar>\`
-2. \`node build/validate-coverage.mjs\` — exits non-zero if a token was renamed,
-   added or removed.
-3. Update \`src/parts/token-map.js\` for whatever the check reports.
-4. \`node build/verify.mjs\`, then reinstall the bundle.
+2. \`node build/validate-coverage.mjs\`——有令牌被改名、新增或删除就会以非零退出。
+3. 按它报的东西更新 \`src/parts/token-map.js\`。
+4. \`node build/verify.mjs\`，然后重装插件。
 
-The compiled frontend bundle (\`dist/assets/index-*.css\`, ~92 KB) is deliberately
-not vendored: it is a build artifact, and every token it consumes is declared in
-one of the four sheets above.
+编译后的前端包（\`dist/assets/index-*.css\`，约 92 KB）是刻意不抄的：那是构建产物，而它
+读到的每个令牌都在上面四份里声明过。
 `;
 
 await writeFile(join(OUT_DIR, 'README.md'), readme, 'utf8');
 await writeFile(join(OUT_DIR, 'LICENSE'), UPSTREAM_LICENCE, 'utf8');
 
-console.log(`source ${asarPath}`);
-for (const { name, bytes } of written) console.log(`  ${name}: ${bytes} bytes`);
-console.log(`wrote ${join(OUT_DIR, 'README.md')}`);
-console.log(`wrote ${join(OUT_DIR, 'LICENSE')}`);
+console.log(`来源 ${asarPath}`);
+for (const { name, bytes } of written) console.log(`  ${name}：${bytes} 字节`);
+console.log(`已写出 ${join(OUT_DIR, 'README.md')}`);
+console.log(`已写出 ${join(OUT_DIR, 'LICENSE')}`);

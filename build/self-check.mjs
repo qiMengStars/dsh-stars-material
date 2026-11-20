@@ -1,27 +1,26 @@
 /**
- * Offline self-check for the shipped Client bundle.
+ * 已发布 Client 包的离线自检。
  *
- * Runs `plugin/client.js` against a minimal stub of the loader, of the three
- * services it reads (`theme`, `locale`, `slots`) and of the DOM calls it makes,
- * then asserts the layers it installs:
+ * 用一个最小的桩来跑 `plugin/client.js`：加载器、它要读的三个服务（`theme`、
+ * `locale`、`slots`）以及它发出的 DOM 调用都做了替身，然后断言它装上的每一层：
  *
- *   - exactly the product tokens the shipped stylesheets read are covered;
- *   - every value is a `{ light, dark }` pair of non-empty strings;
- *   - colours are `#rrggbb` / `#rrggbbaa` / `color-mix()` over literals;
- *   - the border tokens Material 3 does not draw are `transparent` while the
- *     one that paints the switch track and the ring gauges stays visible;
- *   - every elevation and shadow composite resolves to `none`;
- *   - every state-layer token is an 8%–12% `color-mix()` over the palette;
- *   - the captured surface ramp strictly descends from lowest to highest;
- *   - the `--dsh-m3-*` bridge carries both schemes;
- *   - the two theme ids are registered with the matching colour scheme;
- *   - preset mode, system mode, the system-mode fallback and the disabled state
- *     each install exactly what they should, and every one cleans up.
+ *   - 已发布样式表真正读到的产品令牌，全都覆盖到了；
+ *   - 每个值都是两个非空字符串组成的 `{ light, dark }`；
+ *   - 颜色是 `#rrggbb` / `#rrggbbaa` / 基于字面量的 `color-mix()`；
+ *   - Material 3 不画的边框令牌是 `transparent`，而画开关轨道和环形仪表的那一
+ *     个仍然可见；
+ *   - 所有高程与阴影组合值都解析成 `none`；
+ *   - 每个状态层令牌都是叠在配色上的 8%–12% `color-mix()`；
+ *   - 抓出来的表面阶梯从最低到最高严格递减；
+ *   - `--dsh-m3-*` 桥接属性同时带两套配色；
+ *   - 两个主题 id 按对应的深浅色方案注册；
+ *   - 预设模式、系统模式、系统模式的回退以及禁用状态各自只装该装的层，并且都
+ *     能清理干净。
  *
  *   node build/self-check.mjs
  *
- * This is a logic check, not a visual one: it proves the data and the wiring,
- * not how the result looks in the running application.
+ * 这是逻辑检查，不是观感检查：它证明数据和接线，不证明在运行中的应用里看起来
+ * 如何。
  */
 
 import { readFile } from 'node:fs/promises';
@@ -48,11 +47,11 @@ const SHIPPED_CSS = [
   'gradient-shadow-text.css',
 ];
 
-/** The colour authority, exactly as `build/validate-coverage.mjs` defines it. */
+/** 颜色权威，定义与 `build/validate-coverage.mjs` 完全一致。 */
 const COLOUR_SHEET = 'design-platform.css';
 
 // ---------------------------------------------------------------------------
-// DOM stub — only the calls this bundle actually makes.
+// DOM 桩：只桩这个包真正会发出的调用。
 // ---------------------------------------------------------------------------
 
 function createDom() {
@@ -82,7 +81,7 @@ function createDom() {
 }
 
 // ---------------------------------------------------------------------------
-// Service stubs
+// 服务的桩
 // ---------------------------------------------------------------------------
 
 function createThemeStub() {
@@ -131,20 +130,19 @@ function createSlotsStub() {
 }
 
 // ---------------------------------------------------------------------------
-// Harness: load the bundle once, then drive `apply` with a fresh context each
-// time so the four scenarios cannot leak into each other.
+// 跑法：包只加载一次，之后每次都用一份新的上下文调 `apply`，这样各个场景之间
+// 不会互相串味。
 // ---------------------------------------------------------------------------
 
 const source = await readFile(BUNDLE, 'utf8');
 const dom = createDom();
 
 /**
- * Timer queue.
+ * 定时器队列。
  *
- * The Client half retries the accent-colour question on a backoff, so a scenario
- * that answers "the Host is down" now schedules work instead of finishing inside
- * one microtask. Driving those timers by hand keeps the check fast and makes the
- * retry order observable.
+ * Client 半边会按退避时间表重试强调色查询，所以回答「Host 不可用」的场景现在会
+ * 排下待办，而不是在一个微任务里就跑完。手动驱动这些定时器既让自检保持快，又
+ * 能把重试顺序看清楚。
  */
 const timers = [];
 let nextTimerId = 1;
@@ -168,12 +166,12 @@ const sandbox = {
 };
 sandbox.globalThis = sandbox;
 sandbox.window = {
-  localStorage: null, // replaced per scenario
+  localStorage: null, // 每个场景各换一份
   addEventListener() {},
   removeEventListener() {},
   setTimeout: queueTimer,
   clearTimeout: dropTimer,
-  fetch: null, // replaced per scenario
+  fetch: null, // 每个场景各换一份
 };
 sandbox.window.__ModuleLoader__ = {
   load(options) {
@@ -185,7 +183,7 @@ sandbox.document = dom.document;
 vm.createContext(sandbox);
 vm.runInContext(source, sandbox, { filename: 'plugin/client.js' });
 
-check(typeof factory === 'function', 'the bundle did not call __ModuleLoader__.load');
+check(typeof factory === 'function', '这个包没有调用 __ModuleLoader__.load');
 if (typeof factory !== 'function') {
   report();
   process.exit(1);
@@ -200,16 +198,16 @@ const plugin = factory((id) => {
   };
 });
 
-check(Array.isArray(plugin.inject), 'the plugin does not declare inject');
-check(plugin.inject.includes('theme'), 'the plugin does not declare the theme service');
-check(typeof plugin.apply === 'function', 'the plugin does not expose apply()');
+check(Array.isArray(plugin.inject), '插件没有声明 inject');
+check(plugin.inject.includes('theme'), '插件没有声明 theme 服务');
+check(typeof plugin.apply === 'function', '插件没有暴露 apply()');
 
 /**
- * Run one scenario.
+ * 跑一个场景。
  *
  * @param {object} options
- * @param {Record<string,string>} options.storage   localStorage seed
- * @param {Function|null} options.fetch             `window.fetch` replacement
+ * @param {Record<string,string>} options.storage   localStorage 初始内容
+ * @param {Function|null} options.fetch             `window.fetch` 的替身
  */
 async function scenario({ storage, fetch }) {
   const store = new Map(Object.entries(storage ?? {}));
@@ -219,7 +217,7 @@ async function scenario({ storage, fetch }) {
   };
   sandbox.window.fetch = fetch ?? (() => Promise.reject(new Error('no fetch')));
 
-  /** Number of times the Client asked the Host for the accent palette. */
+  /** Client 向 Host 要强调色配色的次数。 */
   let attempts = 0;
   const hostFetch = sandbox.window.fetch;
   sandbox.window.fetch = (...args) => {
@@ -257,16 +255,15 @@ async function scenario({ storage, fetch }) {
   };
 
   plugin.apply(ctx);
-  // System mode resolves across an await; preset mode does not, but awaiting a
-  // microtask is harmless for both and is what makes the assertions reliable.
+  // 系统模式要跨一个 await 才出结果，预设模式不用；但两种情况下多等一个微任务
+  // 都无害，断言能稳就靠这一步。
   await new Promise((tick) => setImmediate(tick));
 
   /**
-   * Drive the retry backoff to exhaustion.
+   * 把重试退避一次跑到头。
    *
-   * Without this the assertions would see the mid-flight state — the layers from
-   * the previous palette — instead of the settled one, which is what a user
-   * actually ends up looking at.
+   * 少了这一步，断言看到的是半路状态：还是上一份配色留下的层，而不是最终稳住的
+   * 那一份，后者才是用户真正看到的样子。
    */
   const settle = async () => {
     for (let round = 0; round < 8; round += 1) {
@@ -297,16 +294,15 @@ async function scenario({ storage, fetch }) {
 }
 
 // ---------------------------------------------------------------------------
-// Expected token set
+// 预期的令牌集合
 // ---------------------------------------------------------------------------
 
 /**
- * The names the colour authority assigns, minus the raw `--dsw-static-*` ramps.
+ * 颜色权威里定义的名字，去掉 `--dsw-static-*` 那几组原始色阶。
  *
- * Only `design-platform.css` defines the colour contract, so only its colour
- * tokens have to appear in the override layer. Font, radius and easing variables
- * live in other sheets and stay with the product: this theme has no opinion
- * about them, and overriding them would make the bundle's scope harder to read.
+ * 颜色契约只由 `design-platform.css` 定义，所以只有它的颜色令牌必须出现在覆盖
+ * 层里。字体、圆角和缓动变量在别的样式表里，仍归产品管：这个主题对它们没有意
+ * 见，覆盖它们只会让这个包的边界更难看清。
  */
 const declared = new Set();
 {
@@ -318,7 +314,7 @@ const expected = [...declared]
   .filter((name) => name.startsWith('--dsw-alias-') || name.startsWith('--dsw-specific-'))
   .sort();
 
-/** Every name any vendored sheet assigns, plus the ones read through a fallback. */
+/** 所有内置样式表里出现过的名字，再加上经回退读到的那几个。 */
 const everywhere = new Set(['--dsw-alias-border-selected']);
 for (const name of SHIPPED_CSS) {
   const css = await readFile(resolve(SURVEY, name), 'utf8');
@@ -326,27 +322,27 @@ for (const name of SHIPPED_CSS) {
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 1: preset mode (synchronous, no Host round trip)
+// 场景 1：预设模式（同步，不走 Host 往返）
 // ---------------------------------------------------------------------------
 
 const preset = await scenario({
   storage: { 'dsh.stars-material.source': 'preset', 'dsh.stars-material.preset': 'baseline' },
 });
 
-check(preset.theme.calls.overrides.length === 2, `expected two override layers, got ${preset.theme.calls.overrides.length}`);
+check(preset.theme.calls.overrides.length === 2, `期望两套覆盖层，实际 ${preset.theme.calls.overrides.length} 套`);
 
 const override = preset.theme.calls.overrides[0];
-check(override?.source === 'dsh-stars-material', `override source is "${override?.source}"`);
+check(override?.source === 'dsh-stars-material', `覆盖层的 source 是 "${override?.source}"`);
 const bridge = preset.theme.calls.overrides[1];
-check(bridge?.source === 'dsh-stars-material/bridge', `bridge source is "${bridge?.source}"`);
+check(bridge?.source === 'dsh-stars-material/bridge', `桥接层的 source 是 "${bridge?.source}"`);
 
 const tokens = override?.tokens ?? {};
 const productNames = Object.keys(tokens).sort();
 
 const missing = expected.filter((name) => !productNames.includes(name));
 const invented = productNames.filter((name) => !everywhere.has(name));
-check(missing.length === 0, `tokens missing from the override layer: ${missing.join(', ')}`);
-check(invented.length === 0, `override layer invents tokens: ${invented.join(', ')}`);
+check(missing.length === 0, `覆盖层缺了这些令牌：${missing.join(', ')}`);
+check(invented.length === 0, `覆盖层多出样式表里没有的令牌：${invented.join(', ')}`);
 
 const colorLiteral = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/;
 const colorMix = /^(?:color-mix\(in srgb, #(?:[0-9a-f]{6}) \d+%, (?:(?:#(?:[0-9a-f]{6}))|transparent)\)|light-dark\(#(?:[0-9a-f]{6}), #(?:[0-9a-f]{6})\))$/;
@@ -360,11 +356,11 @@ const differInBothSchemes = [];
 
 for (const [name, modes] of Object.entries(tokens)) {
   if (modes === null || typeof modes !== 'object') {
-    failures.push(`${name}: value is not an object`);
+    failures.push(`${name}：值不是对象`);
     continue;
   }
   if (typeof modes.light !== 'string' || typeof modes.dark !== 'string') {
-    failures.push(`${name}: missing a light/dark string pair`);
+    failures.push(`${name}：缺 light/dark 字符串对`);
     continue;
   }
   for (const [scheme, value] of [['light', modes.light], ['dark', modes.dark]]) {
@@ -380,23 +376,22 @@ for (const [name, modes] of Object.entries(tokens)) {
       literal += 1;
       continue;
     }
-    failures.push(`${name} (${scheme}): malformed value "${value}"`);
+    failures.push(`${name} (${scheme})：值格式不对 "${value}"`);
   }
   if (modes.light === modes.dark) sameInBothSchemes.push(name);
   else differInBothSchemes.push(name);
 }
 
-check(derived > 0, 'no color-mix() values were derived');
-check(cleared > 0, 'no token was cleared to transparent/none');
+check(derived > 0, '没有任何 color-mix() 派生值');
+check(cleared > 0, '没有任何令牌被清成 transparent/none');
 check(
   literal + derived + cleared === productNames.length * 2,
-  `processed ${literal + derived + cleared} values for ${productNames.length} tokens; expected two per token`,
+  `处理了 ${literal + derived + cleared} 个值，对应 ${productNames.length} 个令牌；每个令牌应当两个`,
 );
 
-// Strokes Material 3 does not draw. Every border token goes transparent, `l3`
-// included: the four rules that painted a *fill* with it are repainted from the
-// bridge variables in the stylesheet, and the two SVG gauge tracks keep their
-// foreground arc and label.
+// Material 3 不画的描边。每个边框令牌都变透明，`l3` 也在内：原来拿它当填充色
+// 的那四条规则，在样式表里改从桥接变量重绘；两处 SVG 仪表轨道保留自己的前景
+// 弧线和标签。
 for (const name of [
   '--dsw-alias-border-l1',
   '--dsw-alias-border-l2',
@@ -406,10 +401,10 @@ for (const name of [
   '--dsw-alias-settings-card-stroke',
   '--dsw-alias-border-selected',
 ]) {
-  check(tokens[name]?.light === 'transparent', `${name} must be transparent`);
+  check(tokens[name]?.light === 'transparent', `${name} 必须是 transparent`);
 }
 
-// Elevation is tone, not shadow.
+// 高程靠色调表达，不靠阴影。
 for (const name of [
   '--dsw-shadow-lv1',
   '--dsw-shadow-lv3',
@@ -418,10 +413,10 @@ for (const name of [
   '--dsw-elevation-prominent',
   '--dsw-elevation-soft',
 ]) {
-  check(tokens[name]?.light === 'none', `${name} must resolve to none`);
+  check(tokens[name]?.light === 'none', `${name} 必须解析成 none`);
 }
 
-// Hover is a state layer over the surface, never a shadow.
+// 悬停是叠在表面色上的状态层，永远不是阴影。
 for (const name of [
   '--dsw-alias-interactive-bg-hover',
   '--dsw-alias-interactive-bg-active',
@@ -430,22 +425,22 @@ for (const name of [
   const value = tokens[name]?.light ?? '';
   check(
     /^color-mix\(in srgb, #(?:[0-9a-f]{6}) (?:\d+)%, /u.test(value),
-    `${name} must be a state-layer color-mix, got "${value}"`,
+    `${name} 必须是状态层的 color-mix，实际是 "${value}"`,
   );
 }
 check(
   (tokens['--dsw-alias-interactive-bg-hover']?.light ?? '').includes('transparent'),
-  '--dsw-alias-interactive-bg-hover must mix into transparent so it works on any surface',
+  '--dsw-alias-interactive-bg-hover 必须混进 transparent，才能在任何表面色上都成立',
 );
 
-// Artwork that must not vary, and surfaces that must.
+// 这几样图不能随配色变，而表面色必须变。
 for (const name of ['--dsw-alias-bg-mask-photo', '--dsw-alias-border-inverted']) {
-  check(tokens[name]?.light === tokens[name]?.dark, `${name} must not vary between schemes`);
+  check(tokens[name]?.light === tokens[name]?.dark, `${name} 不能随深浅色变化`);
 }
-check(!sameInBothSchemes.includes('--dsw-alias-bg-base'), '--dsw-alias-bg-base is identical in both schemes');
-check(differInBothSchemes.length > 90, `only ${differInBothSchemes.length} tokens differ between schemes`);
+check(!sameInBothSchemes.includes('--dsw-alias-bg-base'), '--dsw-alias-bg-base 在两套配色里完全相同');
+check(differInBothSchemes.length > 90, `只有 ${differInBothSchemes.length} 个令牌在深浅色之间有差异`);
 
-// The captured surface ramp must descend: lowest is the brightest light surface.
+// 抓出来的表面阶梯必须递减：最低那级就是最亮的浅色表面。
 {
   const ramp = [
     '--dsw-alias-bg-base',
@@ -462,80 +457,80 @@ check(differInBothSchemes.length > 90, `only ${differInBothSchemes.length} token
   const descending = lightValues.every(
     (value, index) => index === 0 || luminance(lightValues[index - 1]) >= luminance(value),
   );
-  check(descending, `the light surface ramp does not descend: ${lightValues.join(' ')}`);
+  check(descending, `浅色表面阶梯不是逐级变深：${lightValues.join(' ')}`);
 
   const darkValues = ramp.map((name) => tokens[name]?.dark ?? '#000000');
   const ascending = darkValues.every(
     (value, index) => index === 0 || luminance(darkValues[index - 1]) <= luminance(value),
   );
-  check(ascending, `the dark surface ramp does not ascend: ${darkValues.join(' ')}`);
+  check(ascending, `深色表面阶梯不是逐级变浅：${darkValues.join(' ')}`);
 }
 
-// Bridge properties carry both schemes through light-dark().
+// 桥接属性用 light-dark() 把两套配色都带上。
 const bridgeNames = Object.keys(bridge?.tokens ?? {});
-check(bridgeNames.length >= 15, `only ${bridgeNames.length} bridge properties were published`);
+check(bridgeNames.length >= 15, `只发布了 ${bridgeNames.length} 个桥接属性`);
 for (const name of bridgeNames) {
-  check(name.startsWith('--dsh-m3-'), `bridge property "${name}" does not use the --dsh-m3- prefix`);
+  check(name.startsWith('--dsh-m3-'), `桥接属性 "${name}" 没有用 --dsh-m3- 前缀`);
   check(
     /^light-dark\(#(?:[0-9a-f]{6}), #(?:[0-9a-f]{6})\)$/u.test(bridge.tokens[name]?.light ?? ''),
-    `bridge property "${name}" is not a light-dark() pair`,
+    `桥接属性 "${name}" 不是 light-dark() 对`,
   );
 }
 
-// Registered themes.
+// 注册的主题。
 const ids = preset.theme.calls.registered.map((entry) => `${entry.id}:${entry.colorScheme}`).sort();
 check(
   ids.join(',') === 'stars-material-dark:dark,stars-material-light:light',
-  `registered themes are [${ids.join(', ')}]`,
+  `注册的主题是 [${ids.join(', ')}]`,
 );
 for (const entry of preset.theme.calls.registered) {
   const own = Object.keys(entry.tokens);
   const bad = own.filter((name) => !name.startsWith('--dsw-'));
-  check(bad.length === 0, `theme "${entry.id}" carries non-product tokens: ${bad.join(', ')}`);
+  check(bad.length === 0, `主题 "${entry.id}" 带了非产品令牌：${bad.join(', ')}`);
   const mismatch = own.filter((name) => entry.tokens[name] !== tokens[name]?.[entry.colorScheme]);
-  check(mismatch.length === 0, `theme "${entry.id}" disagrees with the override layer`);
+  check(mismatch.length === 0, `主题 "${entry.id}" 与覆盖层对不上`);
 }
 
-// Locales.
-check(preset.locale.__dicts.length === 1, `expected one dictionary set, got ${preset.locale.__dicts.length}`);
+// 语言词典。
+check(preset.locale.__dicts.length === 1, `期望一套词典，实际 ${preset.locale.__dicts.length} 套`);
 const en = preset.locale.__dicts[0]?.en;
 const zh = preset.locale.__dicts[0]?.zh;
-check(en !== undefined && zh !== undefined, 'locale dictionaries are missing');
+check(en !== undefined && zh !== undefined, '缺少语言词典');
 if (en && zh) {
   check(
     Object.keys(en).sort().join(',') === Object.keys(zh).sort().join(','),
-    'en and zh dictionaries have different keys',
+    'en 和 zh 词典的键不一致',
   );
-  check(en['page.sourceSystem'] !== undefined, 'locale misses page.sourceSystem');
-  check(!Object.keys(en).some((key) => key.startsWith('variant.')), 'the removed harmony variants are still translated');
+  check(en['page.sourceSystem'] !== undefined, '词典缺少 page.sourceSystem');
+  check(!Object.keys(en).some((key) => key.startsWith('variant.')), '删掉的 harmony 变体还在翻译表里');
 }
 
-// The settings page is contributed to `settings.section` under its own id.
-check(preset.slots.__registrations.length === 1, `expected one settings section, got ${preset.slots.__registrations.length}`);
+// 设置页以它自己的 id 挂到 `settings.section` 上。
+check(preset.slots.__registrations.length === 1, `期望一个设置分区，实际 ${preset.slots.__registrations.length} 个`);
 check(
   preset.slots.__registrations[0]?.options?.id === 'stars-material',
-  'the settings section id is not "stars-material"',
+  '设置分区的 id 不是 "stars-material"',
 );
 check(
   preset.slots.__registrations[0]?.options?.order === 26,
-  'the settings section order is not 26',
+  '设置分区的 order 不是 26',
 );
 
-// Stylesheet: one tag, carries the shape scale, the motion curves and the rules.
-check(dom.tags.length === 1, `expected exactly one <style>, got ${dom.tags.length}`);
+// 样式表：只一个标签，带着形状刻度、缓动曲线和那几条规则。
+check(dom.tags.length === 1, `期望恰好一个 <style>，实际 ${dom.tags.length} 个`);
 const sheet = dom.tags[0]?.textContent ?? '';
-check(sheet.includes('--dsw-radius-panel'), 'the shape scale is missing from the injected stylesheet');
-check(sheet.includes('--dsw-m3-ease-emphasized-decelerate'), 'the motion curve is missing');
-check(sheet.includes('[role="switch"]'), 'the switch repaint rule is missing');
-check(sheet.includes('prefers-reduced-motion'), 'the reduced-motion guard is missing');
-check(!/\._[a-z0-9]+_[a-z0-9]+_\d+/u.test(sheet), 'the stylesheet hardcodes a CSS module hash class');
+check(sheet.includes('--dsw-radius-panel'), '注入的样式表里没有形状刻度');
+check(sheet.includes('--dsw-m3-ease-emphasized-decelerate'), '样式表里没有缓动曲线');
+check(sheet.includes('[role="switch"]'), '样式表里没有开关重绘规则');
+check(sheet.includes('prefers-reduced-motion'), '样式表里没有 reduced-motion 保护');
+check(!/\._[a-z0-9]+_[a-z0-9]+_\d+/u.test(sheet), '样式表里硬编码了 CSS module 的哈希类名');
 
 preset.disposeAll();
-check(preset.theme.calls.disposed >= 4, `only ${preset.theme.calls.disposed} layers were disposed`);
-check(dom.tags.length === 0, 'the <style> element outlived the plugin');
+check(preset.theme.calls.disposed >= 4, `只释放了 ${preset.theme.calls.disposed} 层`);
+check(dom.tags.length === 0, '<style> 元素没有随插件一起移除');
 
 // ---------------------------------------------------------------------------
-// Scenario 2: system mode with a Host answer
+// 场景 2：系统模式，Host 正常答复
 // ---------------------------------------------------------------------------
 
 const ANSWER = {
@@ -551,24 +546,24 @@ const system = await scenario({
   fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve(ANSWER) }),
 });
 
-check(system.theme.calls.overrides.length === 2, 'system mode did not install both override layers');
+check(system.theme.calls.overrides.length === 2, '系统模式没有装上两套覆盖层');
 check(
   system.theme.calls.registered.length === 2,
-  `system mode registered ${system.theme.calls.registered.length} themes`,
+  `系统模式注册了 ${system.theme.calls.registered.length} 个主题`,
 );
-// 'a' is not a colour; every role must still come out as a well-formed literal.
+// 'a' 不是颜色；每个角色照样必须输出成格式正确的字面量。
 const systemTokens = system.theme.calls.overrides[0]?.tokens ?? {};
 check(
   systemTokens['--dsw-alias-bg-base']?.light === '#aaaaaa',
-  `system mode did not use the Host palette: "${systemTokens['--dsw-alias-bg-base']?.light}"`,
+  `系统模式没有用 Host 给的配色："${systemTokens['--dsw-alias-bg-base']?.light}"`,
 );
 const state = system.slots.__registrations[0]?.options?.inject?.()?.state;
-check(state?.systemSeed === '#00639b', `the settings page does not show the system seed: "${state?.systemSeed}"`);
+check(state?.systemSeed === '#00639b', `设置页没有显示系统种子色："${state?.systemSeed}"`);
 system.disposeAll();
-check(dom.tags.length === 0, 'the system-mode stylesheet outlived the plugin');
+check(dom.tags.length === 0, '系统模式的样式表没有随插件一起移除');
 
 // ---------------------------------------------------------------------------
-// Scenario 3: system mode when the Host is unavailable
+// 场景 3：系统模式，Host 不可用
 // ---------------------------------------------------------------------------
 
 const fallback = await scenario({
@@ -576,25 +571,24 @@ const fallback = await scenario({
   fetch: () => Promise.reject(new Error('ECONNREFUSED')),
 });
 
-check(fallback.theme.calls.overrides.length === 2, 'the fallback did not install both override layers');
+check(fallback.theme.calls.overrides.length === 2, '回退没有装上两套覆盖层');
 const fallbackState = fallback.slots.__registrations[0]?.options?.inject?.()?.state;
 check(
   fallbackState?.systemSeed === null,
-  'the settings page must report that no system colour is available',
+  '设置页必须标注系统取色不可用',
 );
 check(
   fallback.theme.calls.overrides[0]?.tokens?.['--dsw-alias-bg-base']?.light === '#fdf7ff',
-  'the fallback palette is not the Material baseline',
+  '回退配色不是 Material 基准',
 );
 check(
   fallback.attempts() === 4,
-  `a Host that never answers must be retried four times, not ${fallback.attempts()}`,
+  `Host 一直不答复时要重试四次，实际 ${fallback.attempts()} 次`,
 );
 fallback.disposeAll();
-check(dom.tags.length === 0, 'the fallback stylesheet outlived the plugin');
+check(dom.tags.length === 0, '回退的样式表没有随插件一起移除');
 
-// A first attempt that fails must not be final: the next retry upgrades the
-// layers instead of leaving the baseline palette in place for the session.
+// 第一次失败不能算数：下一次重试要把层换掉，而不是让整场会话都停在基准配色上。
 const recovered = await scenario({
   storage: { 'dsh.stars-material.source': 'system' },
   fetch: (() => {
@@ -607,92 +601,92 @@ const recovered = await scenario({
     };
   })(),
 });
-check(recovered.attempts() >= 2, `the Host was only asked ${recovered.attempts()} times`);
-// The last install contributes two layers: tokens first, then the bridge pairs.
+check(recovered.attempts() >= 2, `Host 只被问了 ${recovered.attempts()} 次`);
+// 最后一次安装贡献两层：先令牌，再桥接对。
 check(
   recovered.theme.calls.overrides.at(-2)?.tokens?.['--dsw-alias-bg-base']?.light === '#aaaaaa',
-  'a retry that succeeds did not replace the fallback palette',
+  '重试成功之后没有换掉回退配色',
 );
 const recoveredState = recovered.slots.__registrations[0]?.options?.inject?.()?.state;
 check(
   recoveredState?.systemSeed === '#00639b',
-  `the recovered seed is not reported: "${recoveredState?.systemSeed}"`,
+  `恢复之后的种子色没有报出来："${recoveredState?.systemSeed}"`,
 );
 recovered.disposeAll();
 
 // ---------------------------------------------------------------------------
-// Scenario 4: disabled
+// 场景 4：禁用
 // ---------------------------------------------------------------------------
 
 const off = await scenario({
   storage: { 'dsh.stars-material.enabled': '0', 'dsh.stars-material.source': 'preset' },
 });
 
-check(off.theme.calls.overrides.length === 0, 'a disabled theme still installed an override layer');
-check(off.theme.calls.registered.length === 0, 'a disabled theme still registered a theme');
-check(dom.tags.length === 1, 'the settings stylesheet must stay present while disabled');
+check(off.theme.calls.overrides.length === 0, '禁用状态下仍然装了一层覆盖');
+check(off.theme.calls.registered.length === 0, '禁用状态下仍然注册了主题');
+check(dom.tags.length === 1, '禁用时设置页样式表必须还在');
 const offSheet = dom.tags[0]?.textContent ?? '';
-check(!offSheet.includes('--dsw-radius-panel'), 'theme-only rules leaked into the disabled stylesheet');
-check(offSheet.includes('-page'), 'the settings stylesheet disappeared while disabled');
+check(!offSheet.includes('--dsw-radius-panel'), '只该在启用时出现的规则漏进了禁用状态的样式表');
+check(offSheet.includes('-page'), '禁用时设置页样式表不见了');
 off.disposeAll();
-check(dom.tags.length === 0, 'the disabled stylesheet outlived the plugin');
+check(dom.tags.length === 0, '禁用状态的样式表没有随插件一起移除');
 
 // ---------------------------------------------------------------------------
-// Scenario 5: a profile that still holds pre-rename keys
+// 场景 5：profile 里还留着改名前的键
 // ---------------------------------------------------------------------------
 
-// The plugin used to be called dsh-material-3 and wrote dsh.material-3.*. A
-// rename must not silently reset the preference, so the old keys are read once.
+// 插件原来叫 dsh-material-3，写的是 dsh.material-3.*。改名不能悄悄把偏好重置，
+// 所以旧键只读一次。
 const legacy = await scenario({
   storage: { 'dsh.material-3.enabled': '0', 'dsh.material-3.source': 'preset' },
 });
 check(
   legacy.theme.calls.overrides.length === 0,
-  'a legacy "enabled: 0" was ignored, so the rename reset the user preference',
+  '旧键里的 "enabled: 0" 被忽略了，改名把用户偏好重置了',
 );
 const legacyState = legacy.slots.__registrations[0]?.options?.inject?.()?.state;
 check(
   legacyState?.enabled === false,
-  `legacy preference not carried over: enabled is "${legacyState?.enabled}"`,
+  `旧偏好没有带过来：enabled 是 "${legacyState?.enabled}"`,
 );
 const legacyPreset = await scenario({
   storage: { 'dsh.material-3.source': 'preset', 'dsh.material-3.preset': 'teal' },
 });
 check(
   legacyPreset.theme.calls.overrides.at(-2)?.tokens?.['--dsw-alias-bg-base'] !== undefined,
-  'legacy preset mode did not install a palette',
+  '旧键的预设模式没有装上配色',
 );
 legacy.disposeAll();
 legacyPreset.disposeAll();
 
-// The current key must win over the legacy one once it exists.
+// 新键一旦存在，就必须压过旧键。
 const bothKeys = await scenario({
   storage: { 'dsh.stars-material.enabled': '1', 'dsh.material-3.enabled': '0' },
 });
 check(
   bothKeys.theme.calls.overrides.length === 2,
-  'the current key did not take precedence over the legacy key',
+  '新键没有压过旧键',
 );
 bothKeys.disposeAll();
 
 // ---------------------------------------------------------------------------
-// Report
+// 报告
 // ---------------------------------------------------------------------------
 
 report();
 
 function report() {
   if (failures.length > 0) {
-    process.stderr.write(`self-check FAILED (${failures.length} of ${assertions})\n`);
+    process.stderr.write(`self-check FAILED（${failures.length}/${assertions} 条断言失败）\n`);
     for (const failure of failures) process.stderr.write(`  - ${failure}\n`);
     process.exitCode = 1;
     return;
   }
-  process.stdout.write(`tokens        ${productNames.length} (${differInBothSchemes.length} differ by scheme)\n`);
-  process.stdout.write(`colours       ${literal} literals, ${derived} derived, ${cleared} cleared\n`);
-  process.stdout.write(`bridge        ${bridgeNames.length} --dsh-m3-* properties\n`);
+  process.stdout.write(`tokens        ${productNames.length} 个（其中 ${differInBothSchemes.length} 个区分深浅色）\n`);
+  process.stdout.write(`colours       ${literal} 个字面量，${derived} 个派生，${cleared} 个清零\n`);
+  process.stdout.write(`bridge        ${bridgeNames.length} 个 --dsh-m3-* 属性\n`);
   process.stdout.write(`themes        ${ids.join(', ')}\n`);
-  process.stdout.write(`locales       en + zh, ${Object.keys(en ?? {}).length} keys aligned\n`);
-  process.stdout.write(`scenarios     preset, system, fallback, recovered, disabled, legacy (${assertions} assertions)\n`);
+  process.stdout.write(`locales       en + zh，${Object.keys(en ?? {}).length} 个键对齐\n`);
+  process.stdout.write(`scenarios     preset, system, fallback, recovered, disabled, legacy（${assertions} 条断言）\n`);
   process.stdout.write('self-check OK\n');
 }
