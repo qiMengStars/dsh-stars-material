@@ -638,7 +638,7 @@ const STORAGE_CUSTOM_SEED = STORAGE_PREFIX + 'customSeed';
  */
 const LEGACY_PREFIX = 'dsh.material-3.';
 
-/** `system` 表示跟随系统强调色；`preset` 表示固定使用某个 Material 3 种子色。 */
+/** `system` follows the OS accent; `preset` pins a built-in seed; `custom` uses the user's own hex seed. */
 const SOURCE_SYSTEM = 'system';
 const SOURCE_PRESET = 'preset';
 const SOURCE_CUSTOM = 'custom';
@@ -870,11 +870,12 @@ function readPreferences() {
 // ---------------------------------------------------------------------------
 
 /**
- * 向 Host 半边请求操作系统强调色。
+ * Ask the Host half for the operating system accent colour.
  *
- * 该操作由 Host 承担：读取注册表需要启动子进程并依赖色彩库，两者都不应进入浏览器
- * 包。请求失败属于正常情况（未设置强调色、非 Windows、子进程被拦截），代价仅是
- * 配色回退到预设。
+ * The Host owns this because reading a registry value needs a child process and
+ * a colour library, neither of which belongs in a browser bundle. A failure is
+ * normal (no accent colour configured, a non-Windows build, a blocked child
+ * process) and only downgrades the theme to the preset palette.
  */
 async function fetchPalette(seed) {
   const controller = new AbortController();
@@ -1450,41 +1451,6 @@ function applyClient(ctx) {
       console.warn('Material 3 主题：取不到系统强调色，改用基准配色', error);
       resolved = presetPalette(DEFAULT_PRESET);
       published.systemSeed = null;
-      install();
-    }
-  };
-
-  /**
-   * Derive the palette for the user's own seed. There is no retry backoff here:
-   * a colour change is one explicit request, and the previous palette stays on
-   * screen if the Host cannot answer.
-   */
-  const resolveCustom = async (id) => {
-    try {
-      const answer = await fetchPalette(preference.customSeed);
-      if (id !== resolutionId) return;
-      // An old Host still owns the route from before the custom seed was
-      // added. It answers the system palette and echoes a different seed;
-      // accepting that would look exactly like "the colour did nothing".
-      const answered = typeof answer.seed === 'string' ? answer.seed.toLowerCase() : null;
-      if (answered !== preference.customSeed) {
-        console.warn('Material 3 theme: Host answered seed ' + answered + ', expected ' + preference.customSeed);
-        published.customError = true;
-        published.customStale = true;
-        install();
-        return;
-      }
-      resolved = answer.palette;
-      published.customError = false;
-      published.customStale = false;
-      install();
-    } catch (error) {
-      if (id !== resolutionId) return;
-      console.warn('Material 3 theme: custom colour could not be derived', error);
-      published.customError = true;
-      published.customStale = false;
-      // `resolved` is still the last good palette (the Material baseline on a
-      // cold start), so re-install it instead of leaving the UI unthemed.
       install();
     }
   };

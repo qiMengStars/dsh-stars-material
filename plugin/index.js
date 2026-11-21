@@ -7,6 +7,9 @@
  * Client 在加载时和切换到"跟随系统"时各请求一次。响应包含强调色，以及由该色
  * 推导的明暗两套 Material 3 角色，浏览器无需引入色彩库。
  *
+ * 同一路由也响应 `?seed=#rrggbb`，供"自选颜色"使用：走同一套调色引擎，但不读
+ * 系统强调色，也不使用其缓存，每次换色都重新推导。
+ *
  * 服务缺失、子进程被拦截、注册表键不存在或取值解析失败时，返回
  * `{ ok: false, reason }`，由 Client 回退到预设配色。
  */
@@ -126,7 +129,7 @@ function isSameOrigin(request, readOrigin) {
   return localHosts.includes(host);
 }
 
-/** A custom seed as `#rrggbb`, or `null` when the request did not carry one. */
+/** 取请求中的自选种子色，统一为小写 `#rrggbb`；没有该参数时返回 null。 */
 function seedFromRequest(request) {
   let url;
   try {
@@ -139,11 +142,10 @@ function seedFromRequest(request) {
 }
 
 /**
- * Derive a palette from a user-supplied seed.
+ * 按请求中的种子色推导配色。
  *
- * Returns `null` when the request is the ordinary system-colour question.
- * A malformed seed is a bad request rather than a system-colour failure, so it
- * gets its own status code and reason.
+ * 普通系统取色请求不带 `seed`，返回 null 交回系统强调色流程；种子色格式非法
+ * 属于请求错误，用 400 与明确的 reason 区分于系统取色失败。
  */
 function answerForSeed(request, engine) {
   const seed = seedFromRequest(request);
@@ -158,37 +160,7 @@ function answerForSeed(request, engine) {
   };
 }
 
-/** A custom seed as `#rrggbb`, or `null` when the request did not carry one. */
-function seedFromRequest(request) {
-  let url;
-  try {
-    url = new URL(request.url ?? '/', 'http://localhost');
-  } catch {
-    return null;
-  }
-  const seed = url.searchParams.get('seed');
-  return seed === null ? null : seed.toLowerCase();
-}
 
-/**
- * Derive a palette from a user-supplied seed.
- *
- * Returns `null` when the request is the ordinary system-colour question.
- * A malformed seed is a bad request rather than a system-colour failure, so it
- * gets its own status code and reason.
- */
-function answerForSeed(request, engine) {
-  const seed = seedFromRequest(request);
-  if (seed === null) return null;
-  if (!/^#[0-9a-f]{6}$/u.test(seed)) {
-    return { status: 400, payload: { ok: false, reason: 'seed must be a #rrggbb colour' } };
-  }
-  const palette = engine.paletteFromSeed(seed);
-  return {
-    status: 200,
-    payload: { ok: true, seed, light: palette.light, dark: palette.dark },
-  };
-}
 
 /** 查询注册表项的 DWORD 值；查询失败返回 null。 */
 function queryRegistry(key, value) {
