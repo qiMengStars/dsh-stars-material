@@ -41,9 +41,9 @@ assert.equal(registered.kind, 'exact');
 assert.equal(registered.path, '/stars-material/palette');
 
 /** Minimal stand-in for the node request/response pair. */
-function exchange(headers) {
+function exchange(headers, url = '/stars-material/palette') {
   const state = { statusCode: 0, headers: {}, body: '' };
-  const request = { headers, method: 'GET', url: '/stars-material/palette' };
+  const request = { headers, method: 'GET', url };
   const response = {
     get statusCode() {
       return state.statusCode;
@@ -94,6 +94,38 @@ if (payload.ok) {
 const again = exchange({ host: '127.0.0.1:12345', origin: 'http://127.0.0.1:12345' });
 await registered.handler(again.request, again.response);
 assert.equal(again.state.body, sameOrigin.state.body, 'the answer must be cached');
+
+// Custom seeds go through the same route but bypass the system-colour cache.
+async function seeded(url) {
+  const sample = exchange({ host: '127.0.0.1:12345', origin: 'http://127.0.0.1:12345' }, url);
+  await registered.handler(sample.request, sample.response);
+  return sample.state;
+}
+
+const red = await seeded('/stars-material/palette?seed=%23ff0000');
+assert.equal(red.statusCode, 200, 'a valid custom seed must be served');
+const redPayload = JSON.parse(red.body);
+assert.equal(redPayload.ok, true);
+assert.equal(redPayload.seed, '#ff0000');
+assert.equal(redPayload.light.length, 270);
+assert.equal(redPayload.dark.length, 270);
+
+const blue = await seeded('/stars-material/palette?seed=%230000ff');
+const bluePayload = JSON.parse(blue.body);
+assert.equal(bluePayload.ok, true);
+assert.equal(bluePayload.seed, '#0000ff');
+assert.notEqual(bluePayload.light, redPayload.light, 'the system-colour cache must not leak into custom seeds');
+
+const badSeed = await seeded('/stars-material/palette?seed=red');
+assert.equal(badSeed.statusCode, 400, 'an invalid seed must be rejected');
+assert.equal(JSON.parse(badSeed.body).ok, false);
+
+const crossSeed = exchange(
+  { host: '127.0.0.1:12345', origin: 'http://evil.example' },
+  '/stars-material/palette?seed=%23ff0000',
+);
+await registered.handler(crossSeed.request, crossSeed.response);
+assert.equal(crossSeed.state.statusCode, 403, 'the custom seed route must keep the origin guard');
 
 for (const dispose of effects) dispose();
 assert.equal(disposed, 1, 'disposing the effect must remove the route');

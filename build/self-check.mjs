@@ -638,7 +638,88 @@ off.disposeAll();
 check(dom.tags.length === 0, 'the disabled stylesheet outlived the plugin');
 
 // ---------------------------------------------------------------------------
-// Scenario 5: a profile that still holds pre-rename keys
+// Scenario 5: custom mode with a user-picked seed
+// ---------------------------------------------------------------------------
+
+let askedSeed = null;
+const CUSTOM_ANSWER = {
+  ok: true,
+  light: 'c'.repeat(270),
+  dark: 'd'.repeat(270),
+};
+const custom = await scenario({
+  storage: {
+    'dsh.stars-material.source': 'custom',
+    'dsh.stars-material.customSeed': '#ff0000',
+  },
+  fetch: (url) => {
+    askedSeed = String(url);
+    const seed = new URL(askedSeed, 'http://localhost').searchParams.get('seed');
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ ...CUSTOM_ANSWER, seed }) });
+  },
+});
+
+check(askedSeed?.includes('seed=%23ff0000'), `custom mode asked for the wrong URL: "${askedSeed}"`);
+check(custom.attempts() === 1, `a custom seed must need one request, got ${custom.attempts()}`);
+check(
+  custom.theme.calls.overrides.at(-2)?.tokens?.['--dsw-alias-bg-base']?.light === '#cccccc',
+  'custom mode did not install the Host palette derived from the user seed',
+);
+const customState = custom.slots.__registrations[0]?.options?.inject?.()?.state;
+check(customState?.customSeed === '#ff0000', `the settings page lost the custom seed: "${customState?.customSeed}"`);
+check(customState?.customError === false, 'a successful custom palette must not report an error');
+
+/** Change the seed through the settings callback, as the colour picker does. */
+const onChange = custom.slots.__registrations[0]?.options?.inject?.()?.onChange;
+onChange({ enabled: true, source: 'custom', preset: 'baseline', customSeed: '#00FF00' });
+await new Promise((tick) => setImmediate(tick));
+check(custom.store.get('dsh.stars-material.customSeed') === '#00ff00', 'the custom seed was not persisted');
+check(
+  custom.theme.calls.overrides.at(-2)?.tokens?.['--dsw-alias-bg-base']?.light === '#cccccc',
+  'a new seed did not replace the installed custom palette',
+);
+// Malformed input must never reach the Host or corrupt the stored preference.
+onChange({ enabled: true, source: 'custom', preset: 'baseline', customSeed: 'not-a-colour' });
+await new Promise((tick) => setImmediate(tick));
+check(custom.store.get('dsh.stars-material.customSeed') === '#6750a4', 'a malformed seed was persisted');
+custom.disposeAll();
+check(dom.tags.length === 0, 'the custom-mode stylesheet outlived the plugin');
+
+const customFail = await scenario({
+  storage: { 'dsh.stars-material.source': 'custom', 'dsh.stars-material.customSeed': '#123456' },
+  fetch: () => Promise.reject(new Error('ECONNREFUSED')),
+});
+const failedState = customFail.slots.__registrations[0]?.options?.inject?.()?.state;
+check(customFail.attempts() === 1, `a failed custom palette must not retry, got ${customFail.attempts()}`);
+check(failedState?.customError === true, 'a failed custom palette must tell the user');
+check(customFail.theme.calls.overrides.length === 2, 'a failed custom palette must keep the previous layers');
+customFail.disposeAll();
+
+// An old Host still answering the system palette must be reported, not silently
+// applied: otherwise the user sees "nothing changed" with no explanation.
+const staleHost = await scenario({
+  storage: { 'dsh.stars-material.source': 'custom', 'dsh.stars-material.customSeed': '#abcdef' },
+  fetch: () => Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({
+      ok: true,
+      seed: '#00639b',
+      light: 'a'.repeat(270),
+      dark: 'b'.repeat(270),
+    }),
+  }),
+});
+const staleState = staleHost.slots.__registrations[0]?.options?.inject?.()?.state;
+check(staleState?.customStale === true, 'a Host that echoes the wrong seed must be flagged as stale');
+check(staleState?.customError === true, 'a stale Host must surface an error');
+check(
+  staleHost.theme.calls.overrides.at(-2)?.tokens?.['--dsw-alias-bg-base']?.light !== '#aaaaaa',
+  'a stale Host palette must not be applied to the theme',
+);
+staleHost.disposeAll();
+
+// ---------------------------------------------------------------------------
+// Scenario 7: a profile that still holds pre-rename keys
 // ---------------------------------------------------------------------------
 
 // The plugin used to be called dsh-material-3 and wrote dsh.material-3.*. A
@@ -693,6 +774,6 @@ function report() {
   process.stdout.write(`bridge        ${bridgeNames.length} --dsh-m3-* properties\n`);
   process.stdout.write(`themes        ${ids.join(', ')}\n`);
   process.stdout.write(`locales       en + zh, ${Object.keys(en ?? {}).length} keys aligned\n`);
-  process.stdout.write(`scenarios     preset, system, fallback, recovered, disabled, legacy (${assertions} assertions)\n`);
+  process.stdout.write(`scenarios     preset, system, fallback, recovered, disabled, custom, stale, legacy (${assertions} assertions)\n`);
   process.stdout.write('self-check OK\n');
 }

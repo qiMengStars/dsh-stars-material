@@ -10,6 +10,11 @@
  * role set derived from it in both schemes, so the browser never has to run a
  * colour library.
  *
+ * The same route also answers `?seed=#rrggbb` for the custom-colour control.
+ * Those requests use the identical palette engine but skip the operating-system
+ * read and its cache: the seed comes from the user, so every colour change must
+ * be derived afresh.
+ *
  * Everything here degrades: a missing service, a blocked child process, a
  * registry key that does not exist and an unparseable value all end as
  * `{ ok: false, reason }`, and the Client falls back to a preset palette.
@@ -135,6 +140,38 @@ function isSameOrigin(request, readOrigin) {
   }
 
   return localHosts.includes(host);
+}
+
+/** A custom seed as `#rrggbb`, or `null` when the request did not carry one. */
+function seedFromRequest(request) {
+  let url;
+  try {
+    url = new URL(request.url ?? '/', 'http://localhost');
+  } catch {
+    return null;
+  }
+  const seed = url.searchParams.get('seed');
+  return seed === null ? null : seed.toLowerCase();
+}
+
+/**
+ * Derive a palette from a user-supplied seed.
+ *
+ * Returns `null` when the request is the ordinary system-colour question.
+ * A malformed seed is a bad request rather than a system-colour failure, so it
+ * gets its own status code and reason.
+ */
+function answerForSeed(request, engine) {
+  const seed = seedFromRequest(request);
+  if (seed === null) return null;
+  if (!/^#[0-9a-f]{6}$/u.test(seed)) {
+    return { status: 400, payload: { ok: false, reason: 'seed must be a #rrggbb colour' } };
+  }
+  const palette = engine.paletteFromSeed(seed);
+  return {
+    status: 200,
+    payload: { ok: true, seed, light: palette.light, dark: palette.dark },
+  };
 }
 
 /** Run `reg query` for one value and return its DWORD, or `null`. */
@@ -298,8 +335,9 @@ export function apply(ctx) {
           response.end('forbidden');
           return;
         }
-        const payload = await answer();
-        response.statusCode = 200;
+        const seeded = answerForSeed(request, engine);
+        const payload = seeded === null ? await answer() : seeded.payload;
+        response.statusCode = seeded === null ? 200 : seeded.status;
         response.setHeader('content-type', 'application/json; charset=utf-8');
         // The palette follows a user setting; a stale copy would be wrong.
         response.setHeader('cache-control', 'no-store');

@@ -687,6 +687,7 @@ const STORAGE_PREFIX = 'dsh.stars-material.';
 const STORAGE_ENABLED = STORAGE_PREFIX + 'enabled';
 const STORAGE_SOURCE = STORAGE_PREFIX + 'source';
 const STORAGE_PRESET = STORAGE_PREFIX + 'preset';
+const STORAGE_CUSTOM_SEED = STORAGE_PREFIX + 'customSeed';
 
 /**
  * Keys this plugin wrote before it was renamed to `dsh-stars-material`.
@@ -697,9 +698,15 @@ const STORAGE_PRESET = STORAGE_PREFIX + 'preset';
  */
 const LEGACY_PREFIX = 'dsh.material-3.';
 
-/** `system` follows the OS accent colour; `preset` pins one Material 3 seed. */
+/** `system` follows the OS accent; `preset` pins a built-in seed; `custom` uses the user's own hex seed. */
 const SOURCE_SYSTEM = 'system';
 const SOURCE_PRESET = 'preset';
+const SOURCE_CUSTOM = 'custom';
+
+/** Seed shown before the user picks one in custom mode. */
+const DEFAULT_CUSTOM_SEED = '#6750a4';
+
+const HEX_SEED = /^#[0-9a-f]{6}$/iu;
 
 const SETTINGS_SECTION_ID = 'stars-material';
 const SETTINGS_SECTION_ORDER = 26;
@@ -739,7 +746,14 @@ function clampPreset(preset) {
 }
 
 function clampSource(source) {
-  return source === SOURCE_SYSTEM ? SOURCE_SYSTEM : SOURCE_PRESET;
+  if (source === SOURCE_SYSTEM) return SOURCE_SYSTEM;
+  if (source === SOURCE_CUSTOM) return SOURCE_CUSTOM;
+  return SOURCE_PRESET;
+}
+
+/** Accept `#rrggbb` in either case; everything else falls back to the baseline. */
+function clampHexSeed(seed) {
+  return typeof seed === 'string' && HEX_SEED.test(seed) ? seed.toLowerCase() : DEFAULT_CUSTOM_SEED;
 }
 
 /** The build-time palette for a preset id. */
@@ -910,6 +924,7 @@ function readPreferences() {
       readPreference(STORAGE_SOURCE, LEGACY_PREFIX + 'source', SOURCE_SYSTEM),
     ),
     preset: clampPreset(readPreference(STORAGE_PRESET, LEGACY_PREFIX + 'preset', DEFAULT_PRESET)),
+    customSeed: clampHexSeed(readStorage(STORAGE_CUSTOM_SEED, DEFAULT_CUSTOM_SEED)),
   };
 }
 
@@ -918,18 +933,20 @@ function readPreferences() {
 // ---------------------------------------------------------------------------
 
 /**
- * Ask the Host half for the operating system accent colour.
+ * Ask the Host half for a palette.
  *
- * The Host owns this because reading a registry value needs a child process and
- * a colour library, neither of which belongs in a browser bundle. A failure is
- * normal (no accent colour configured, a non-Windows build, a blocked child
- * process) and only downgrades the theme to the preset palette.
+ * With no `seed` this is the operating system accent; with one, it is the
+ * custom colour the user picked. The Host owns the derivation because a colour
+ * library does not belong in this browser bundle. A failed system read is
+ * normal (no accent configured, a non-Windows build, a blocked child process);
+ * a failed custom read just leaves the previous palette in place.
  */
-async function fetchSystemPalette() {
+async function fetchPalette(seed) {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), HOST_TIMEOUT_MS);
+  const url = seed === undefined ? HOST_PALETTE_ROUTE : HOST_PALETTE_ROUTE + '?seed=' + encodeURIComponent(seed);
   try {
-    const response = await window.fetch(HOST_PALETTE_ROUTE, { signal: controller.signal });
+    const response = await window.fetch(url, { signal: controller.signal });
     if (!response.ok) throw new Error('status ' + response.status);
     const payload = await response.json();
     if (payload.ok !== true || typeof payload.light !== 'string' || typeof payload.dark !== 'string') {
@@ -999,6 +1016,46 @@ const SETTINGS_STYLE = `
   height: 16px;
   border-radius: 50%;
   flex: none;
+}
+.${NS}-custom {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.${NS}-color {
+  box-sizing: border-box;
+  width: 44px;
+  height: 34px;
+  padding: 2px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  cursor: pointer;
+}
+.${NS}-hex {
+  box-sizing: border-box;
+  width: 104px;
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  text-transform: lowercase;
+}
+.${NS}-apply {
+  background: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-label-primary-foreground);
+}
+.${NS}-apply[disabled] { opacity: 0.5; cursor: default; }
+.${NS}-apply[disabled]:hover { background: var(--dsw-alias-brand-primary); }
+.${NS}-custom-error {
+  color: var(--dsh-m3-error, var(--dsw-alias-label-primary));
+  font-size: 12px;
+  line-height: 18px;
 }
 .${NS}-toggle { display: inline-flex; align-items: center; gap: 10px; }
 .${NS}-switch {
@@ -1089,18 +1146,43 @@ function Material3SettingsPage(props) {
   const t = props.t;
   const state = props.state;
   const [draft, setDraft] = React.useState(state);
+  const [hexDraft, setHexDraft] = React.useState(state.customSeed ?? DEFAULT_CUSTOM_SEED);
 
   React.useEffect(() => {
     setDraft(state);
-  }, [state.enabled, state.source, state.preset, state.revision]);
+    setHexDraft(state.customSeed ?? DEFAULT_CUSTOM_SEED);
+  }, [state.enabled, state.source, state.preset, state.customSeed, state.revision]);
 
   const commit = (patch) => {
-    const next = { enabled: draft.enabled, source: draft.source, preset: draft.preset, ...patch };
+    const next = {
+      enabled: draft.enabled,
+      source: draft.source,
+      preset: draft.preset,
+      customSeed: draft.customSeed,
+      ...patch,
+    };
     setDraft(next);
     props.onChange(next);
   };
 
+  /**
+   * The picker and the hex field only edit a local draft. Deriving a palette is
+   * a Host round trip, so it must not run once per colour while the picker is
+   * being dragged — only when the user presses Apply.
+   */
+  const candidate = hexDraft.startsWith('#') ? hexDraft : '#' + hexDraft;
+  const draftSeed = HEX_SEED.test(candidate) ? candidate.toLowerCase() : null;
+  const pickerValue = draftSeed ?? draft.customSeed;
+  const pending = draftSeed !== null && draftSeed !== draft.customSeed;
+
+  const applyCustomSeed = () => {
+    if (draftSeed === null) return;
+    setHexDraft(draftSeed);
+    commit({ customSeed: draftSeed });
+  };
+
   const manual = draft.source === SOURCE_PRESET;
+  const custom = draft.source === SOURCE_CUSTOM;
 
   return h(
     'div',
@@ -1140,7 +1222,11 @@ function Material3SettingsPage(props) {
       h(
         'span',
         { className: NS + '-row-desc' },
-        manual ? t('page.sourcePresetDescription') : describeSystem(state, t),
+        custom
+          ? t('page.sourceCustomDescription')
+          : manual
+            ? t('page.sourcePresetDescription')
+            : describeSystem(state, t),
       ),
       h(
         'div',
@@ -1157,6 +1243,13 @@ function Material3SettingsPage(props) {
           label: t('page.sourcePreset'),
           onSelect: () => commit({ source: SOURCE_PRESET }),
         }),
+        h(Chip, {
+          selected: custom,
+          swatch: draft.customSeed,
+          label: t('page.sourceCustom'),
+          title: draft.customSeed,
+          onSelect: () => commit({ source: SOURCE_CUSTOM }),
+        }),
       ),
       manual
         ? h(
@@ -1172,6 +1265,55 @@ function Material3SettingsPage(props) {
                 onSelect: () => commit({ preset: preset.id }),
               }),
             ),
+          )
+        : null,
+      custom
+        ? h(
+            'div',
+            { className: NS + '-custom' },
+            h(
+              'input',
+              {
+                type: 'color',
+                className: NS + '-color',
+                value: pickerValue,
+                'aria-label': t('page.customPickerLabel'),
+                title: t('page.customPickerLabel'),
+                onChange: (event) => setHexDraft(event.target.value),
+              },
+            ),
+            h('input', {
+              type: 'text',
+              className: NS + '-hex',
+              value: hexDraft,
+              maxLength: 7,
+              spellCheck: false,
+              'aria-label': t('page.customHexLabel'),
+              title: t('page.customHexLabel'),
+              onChange: (event) => setHexDraft(event.target.value),
+            }),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: NS + '-chip ' + NS + '-apply',
+                disabled: !pending,
+                onClick: applyCustomSeed,
+              },
+              t('page.customApply'),
+            ),
+            h(
+              'span',
+              { className: NS + '-row-desc' },
+              pending ? t('page.customPending') + ' ' + draftSeed : draft.customSeed,
+            ),
+          )
+        : null,
+      custom && state.customError
+        ? h(
+            'p',
+            { className: NS + '-custom-error' },
+            t(state.customStale ? 'page.customStaleHost' : 'page.customUnavailable'),
           )
         : null,
     ),
@@ -1287,6 +1429,9 @@ function applyClient(ctx) {
     enabled: preference.enabled,
     source: preference.source,
     preset: preference.preset,
+    customSeed: preference.customSeed,
+    customError: false,
+    customStale: false,
     systemSeed: null,
     revision: 0,
   };
@@ -1318,6 +1463,7 @@ function applyClient(ctx) {
     published.enabled = preference.enabled;
     published.source = preference.source;
     published.preset = preference.preset;
+    published.customSeed = preference.customSeed;
     published.revision += 1;
   };
 
@@ -1331,6 +1477,13 @@ function applyClient(ctx) {
 
   /** Handle of the pending accent-colour retry, so a retune can cancel it. */
   let retryTimer = null;
+
+  /**
+   * Monotonic id for the current resolution. Every async answer checks it:
+   * dragging the colour picker fires many requests, and an older answer must
+   * never overwrite a newer one.
+   */
+  let resolutionId = 0;
 
   const cancelRetry = () => {
     if (retryTimer !== null) {
@@ -1349,19 +1502,21 @@ function applyClient(ctx) {
    * question is repeated on a short backoff before the fallback is accepted as
    * final.
    */
-  const resolveSystem = async (attempt) => {
+  const resolveSystem = async (attempt, id) => {
     retryTimer = null;
     try {
-      const answer = await fetchSystemPalette();
+      const answer = await fetchPalette(undefined);
+      if (id !== resolutionId) return;
       resolved = answer.palette;
       published.systemSeed = answer.seed;
       install();
       return;
     } catch (error) {
+      if (id !== resolutionId) return;
       const next = attempt + 1;
       if (next < HOST_RETRY_MS.length) {
         retryTimer = window.setTimeout(() => {
-          void resolveSystem(next);
+          if (id === resolutionId) void resolveSystem(next, id);
         }, HOST_RETRY_MS[next]);
         return;
       }
@@ -1374,25 +1529,69 @@ function applyClient(ctx) {
     }
   };
 
+  /**
+   * Derive the palette for the user's own seed. There is no retry backoff here:
+   * a colour change is one explicit request, and the previous palette stays on
+   * screen if the Host cannot answer.
+   */
+  const resolveCustom = async (id) => {
+    try {
+      const answer = await fetchPalette(preference.customSeed);
+      if (id !== resolutionId) return;
+      // An old Host still owns the route from before the custom seed was
+      // added. It answers the system palette and echoes a different seed;
+      // accepting that would look exactly like "the colour did nothing".
+      const answered = typeof answer.seed === 'string' ? answer.seed.toLowerCase() : null;
+      if (answered !== preference.customSeed) {
+        console.warn('Material 3 theme: Host answered seed ' + answered + ', expected ' + preference.customSeed);
+        published.customError = true;
+        published.customStale = true;
+        install();
+        return;
+      }
+      resolved = answer.palette;
+      published.customError = false;
+      published.customStale = false;
+      install();
+    } catch (error) {
+      if (id !== resolutionId) return;
+      console.warn('Material 3 theme: custom colour could not be derived', error);
+      published.customError = true;
+      published.customStale = false;
+      // `resolved` is still the last good palette (the Material baseline on a
+      // cold start), so re-install it instead of leaving the UI unthemed.
+      install();
+    }
+  };
+
   /** Resolve the palette for `preference.source`, then install it. */
   const resolve = async () => {
+    const id = ++resolutionId;
     cancelRetry();
     if (preference.source === SOURCE_PRESET) {
       resolved = presetPalette(preference.preset);
+      published.customError = false;
+      published.customStale = false;
       install();
       return;
     }
-    await resolveSystem(0);
+    if (preference.source === SOURCE_CUSTOM) {
+      await resolveCustom(id);
+      return;
+    }
+    await resolveSystem(0, id);
   };
 
   const retune = (next) => {
     preference.enabled = next.enabled;
     preference.source = clampSource(next.source);
     preference.preset = clampPreset(next.preset);
+    preference.customSeed = clampHexSeed(next.customSeed);
 
     writeStorage(STORAGE_ENABLED, preference.enabled ? '1' : '0');
     writeStorage(STORAGE_SOURCE, preference.source);
     writeStorage(STORAGE_PRESET, preference.preset);
+    writeStorage(STORAGE_CUSTOM_SEED, preference.customSeed);
 
     if (preference.source === SOURCE_PRESET) {
       resolved = presetPalette(preference.preset);
@@ -1435,6 +1634,7 @@ function applyClient(ctx) {
       preference.enabled = stored.enabled;
       preference.source = stored.source;
       preference.preset = stored.preset;
+      preference.customSeed = stored.customSeed;
       void resolve();
     };
     window.addEventListener('storage', onStorage);
@@ -1461,10 +1661,18 @@ const DICTS = {
     'page.disable': 'Disable Material 3',
     'page.sourceTitle': 'Colour source',
     'page.sourceSystem': 'Follow system',
-    'page.sourcePreset': 'Pick a colour',
+    'page.sourcePreset': 'Use a preset',
+    'page.sourceCustom': 'Custom colour',
     'page.systemDescription': 'Derived from your Windows accent colour.',
     'page.systemUnavailable': 'No accent colour is set on this system, so the Material baseline palette is used.',
     'page.sourcePresetDescription': 'One of the eight Material 3 seed colours.',
+    'page.sourceCustomDescription': 'Pick any colour; light and dark palettes are generated from it.',
+    'page.customPickerLabel': 'Pick a custom seed colour',
+    'page.customHexLabel': 'Seed colour in #rrggbb format',
+    'page.customApply': 'Apply',
+    'page.customPending': 'Click Apply to use',
+    'page.customUnavailable': 'The custom palette could not be generated. The previous palette is still in use.',
+    'page.customStaleHost': 'The running Host is an older version and ignored the seed. Restart dsh, then pick the colour again.',
     'page.note':
       'Changes apply immediately and are remembered in this browser, so they survive a reload without restarting the harness.',
     'preset.baseline': 'Baseline',
@@ -1490,10 +1698,18 @@ const DICTS = {
     'page.disable': '关闭 Material 3',
     'page.sourceTitle': '取色来源',
     'page.sourceSystem': '跟随系统',
-    'page.sourcePreset': '自选颜色',
+    'page.sourcePreset': '预设颜色',
+    'page.sourceCustom': '自选颜色',
     'page.systemDescription': '由 Windows 强调色推导。',
     'page.systemUnavailable': '此系统未设置强调色，因此使用 Material 基准配色。',
     'page.sourcePresetDescription': '从 8 个 Material 3 官方种子色中选择。',
+    'page.sourceCustomDescription': '任意挑选一种颜色，自动生成配套的浅色与深色配色。',
+    'page.customPickerLabel': '选择自定义种子色',
+    'page.customHexLabel': '种子色（#rrggbb 格式）',
+    'page.customApply': '确定',
+    'page.customPending': '点击确定后生效：',
+    'page.customUnavailable': '自定义配色生成失败，当前仍使用上一次的配色。',
+    'page.customStaleHost': '当前 Host 是旧版本，没有读取自选种子色。请重启 dsh 后重新选择颜色。',
     'page.note': '修改立即生效，并记忆在本浏览器中，刷新页面即可恢复，无需重启应用。',
     'preset.baseline': '基准紫',
     'preset.blue': '蓝色',

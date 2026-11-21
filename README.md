@@ -12,6 +12,7 @@
 - 基于 Material 3 色彩角色重绘界面，由同一种子色同步生成浅色与深色两套配色方案
 - 移除传统边框与投影，改用多级表面色调区分层级，并通过状态层呈现悬停、按压与选中反馈
 - 支持自动读取 Windows 系统主题色动态生成配色（读取失败时回退至默认预设），同时内置 8 种预设方案
+- 支持自选任意种子色：颜色选择器或 `#rrggbb` 输入，点击「确定」后才生成配色，避免拖动取色器时反复热重载
 - 配置自动保存在本地，刷新页面即可生效
 
 ## 目录结构
@@ -20,7 +21,7 @@
 plugin/                   构建后的插件产物
   package.json            插件清单（dsh.client、dsh.bundle.patch、files）
   cordis.patch.yml        插件注入补丁配置
-  index.js                Host 端入口：读取系统主题色并提供调色板接口
+  index.js                Host 端入口：读取系统主题色、按自选种子色生成调色板并提供接口
   client.js               Client 端入口：打包后的主题脚本
   icon.svg, locale/*.json 插件图标与中/英多语言文案
   lib/palette.js          供 Host 端使用的调色板生成引擎
@@ -29,7 +30,7 @@ src/                      插件源码
   parts/palette-spec.js   色彩角色顺序、预设定义及桥接角色配置
   parts/palette-engine.js 种子色生成色彩角色、数据打包与对比度校验
   parts/token-map.js      产品级样式变量映射表
-  client/main.js          变量应用、主题层管理、设置页面与重试逻辑
+  client/main.js          变量应用、主题层管理、设置页面、自选颜色与重试逻辑
   client/stylesheet.js    补充 CSS 样式规则（圆角、动效与状态覆盖）
   generated/palettes.js   内置预设的预计算调色板数据
 build/                    构建与校验脚本
@@ -64,6 +65,8 @@ node build/verify.mjs
 ```
 
 `plugin/client.js`、`plugin/lib/**` 与 `src/generated/palettes.js` 均为脚本自动生成的文件，请勿手动修改。
+
+修改 Host 端（`plugin/index.js`）后需要重启 dsh 才会生效；只改客户端时刷新页面即可。自选颜色若提示 Host 版本过旧，按此重启即可。
 
 ## 已知问题
 
