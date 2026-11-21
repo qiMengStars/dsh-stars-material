@@ -1,26 +1,18 @@
 /**
- * The stylesheet half of the theme.
+ * 主题的样式表部分。
  *
- * Token overrides can recolour anything the product addresses through a custom
- * property, but they cannot remove a declaration, and they cannot redraw a rule
- * whose paint came from a token this theme made transparent. This sheet covers
- * exactly those three gaps:
+ * 覆盖令牌可为任何通过自定义属性取色的元素换色，但无法删除声明，也无法重绘那些
+ * 颜料来自本主题透明化令牌的规则。本表补足三类缺口：
  *
- *   1. **Paint that was a border colour.** Several dividers, the progress track
- *      and the table separators painted themselves with `--dsw-alias-border-l1`
- *      / `l2` / `l3` / `l4`. Those tokens are transparent now, so the handful of
- *      cases with a stable selector are redrawn with the surface ramp instead.
- *   2. **Declarations that must disappear.** Material 3 does not draw a stroke
- *      around a text field or an error badge, so the border declarations are
- *      zeroed. Only `border*` is touched — never `outline`, which belongs to
- *      the focus system.
- *   3. **Values the token registry cannot carry.** The radius scale, the motion
- *      curves and the interaction transitions.
+ *   1. 原本以边框色作为颜料的位置。部分分隔线、进度条轨道与表格行分隔使用
+ *      --dsw-alias-border-l1 / l2 / l3 / l4 上色。这些令牌现已透明，选择器能命中
+ *      的位置改用表面阶梯重绘。
+ *   2. 必须消失的声明。Material 3 不在输入框或错误徽标外绘制描边，相应边框声明
+ *      归零。仅调整 border*，不调整 outline。
+ *   3. 令牌无法承载的值。包括圆角刻度、缓动曲线与交互转场。
  *
- * Everything else is left to the token layer. No rule below names a CSS module
- * hash (`._name_hash_1`), a product class or a piece of the layout: selectors are
- * element names, ARIA roles and data attributes only, which is what keeps this
- * sheet working across DSH upgrades.
+ * 其余部分交给令牌层。下列规则不针对 CSS Module 哈希类名、产品类名或布局细节：
+ * 选择器仅使用标签名、ARIA 角色与 data 属性，DSH 升级后仍然适用。
  */
 
 import { MOTION_TOKENS, SHAPE_TOKENS } from '../parts/token-map.js';
@@ -31,37 +23,36 @@ const declarations = (tokens) =>
     .join('\n');
 
 /**
- * Rules that only make sense with the theme on.
+ * 仅在主题开启时生效的规则。
  *
- * The bridge variables (`--dsh-m3-*`) are written by the theme token layer, so
- * every value below follows the active palette automatically.
+ * 桥接变量（--dsh-m3-*）由主题令牌层写入，下列值随当前配色自动变化。
  */
 export const THEME_RULES = `
 :root {
-${declarations(SHAPE_TOKENS)}
-${declarations(MOTION_TOKENS)}
+ ${declarations(SHAPE_TOKENS)}
+ ${declarations(MOTION_TOKENS)}
 }
 
 /* ---------------------------------------------------------------------------
- * 1. Paint that used to come from a border token
+ * 1. 原来以边框令牌作为颜料的位置
  * ------------------------------------------------------------------------- */
 
-/* Markdown and generic rules: a 1dp rule in the outline-variant tone instead of
- * a 0.5dp hairline of 10% black. */
+/* Markdown 与通用分隔线：1dp、outline-variant 色调。产品原本使用 10% 黑的
+ * 0.5dp 发丝线，该两个令牌在本主题中为透明。 */
 hr {
   border: 0;
   height: 1px;
   background: var(--dsh-m3-outline-variant);
 }
 
-/* Group separators inside menus and lists. */
+/* 菜单和列表中的分组分隔。 */
 [role="separator"] {
   border: 0;
   background: var(--dsh-m3-outline-variant);
 }
 
-/* The upload / task progress track: a container tone, so the primary bar on top
- * of it stays the only saturated thing in the row. */
+/* 上传与任务进度条轨道：使用容器色调，使压在其上的主色进度条成为该行唯一的
+ * 饱和色。 */
 progress {
   border: 0;
   background: var(--dsh-m3-surface-container-highest);
@@ -74,9 +65,8 @@ progress::-webkit-progress-bar {
   border-radius: 999px;
 }
 
-/* The switch track painted itself with the border-l3 token, which is transparent
- * in this theme, so the track is redrawn from the outline-variant tone: visible
- * enough to read as a track, quiet enough to stay a control rather than a rule. */
+/* 开关轨道：产品以 border-l3 上色，该令牌在本主题中为透明，改用
+ * outline-variant 重绘，轨道保持可辨。 */
 [role="switch"][aria-checked="false"] {
   background: var(--dsh-m3-outline-variant);
 }
@@ -85,32 +75,29 @@ progress::-webkit-progress-bar {
   background: var(--dsh-m3-primary);
 }
 
-/* Table rows that used to be separated by a 1dp hairline. */
+/* 原先靠 1dp 发丝线分隔的表格行。 */
 tr[data-turn-start="true"]:not(:first-child) > td {
   box-shadow: inset 0 1px 0 var(--dsh-m3-outline-variant);
 }
 
 /* ---------------------------------------------------------------------------
- * 1b. Selected rows carry a container tone
+ * 1b. 选中行使用容器色调
  * ------------------------------------------------------------------------- */
 
-/* The product paints a selected session row with the same token it uses for a
- * hovered one, so the two states are indistinguishable and hovering looks
- * stronger than being selected (an 8% state layer over the column tone is
- * darker than the row's resting fill). Material 3 separates them by role:
- * hover is a state layer on the surface, selection is a container tone. */
+/* 产品为选中的会话行与悬停的行使用同一令牌，两种状态因此无法区分，且悬停较选中
+ * 更重（8% 状态层叠在侧栏色上，深于该行的静息填充）。Material 3 以角色区分：
+ * 悬停是表面上的状态层，选中是容器色调。 */
 [role="treeitem"][aria-selected="true"] {
   background-color: var(--dsh-m3-secondary-container);
 }
 
 /* ---------------------------------------------------------------------------
- * 2. Strokes Material 3 does not draw
+ * 2. Material 3 不绘制的描边
  * ------------------------------------------------------------------------- */
 
-/* Filled text fields: the container tone carries the field, and focus is shown
- * by the ring below rather than by turning the border primary. This overrides
- * component rules that set outline to none and relied on the border instead —
- * it only ever adds a ring, it never removes one. */
+/* 填充式输入框：输入区由容器色调承载，聚焦状态以下方聚焦环表示。产品中有部分
+ * 组件把 outline 设为 none、以 border 颜色表示聚焦，本规则为这些元素补上聚焦环；
+ * 不删除任何既有聚焦环。 */
 input:focus,
 textarea:focus,
 select:focus,
@@ -120,9 +107,8 @@ select:focus,
   outline-style: solid;
 }
 
-/* Error, warning and success badges communicate with their fill and their label
- * colour; the outline drawn around them goes away. The box-shadow is untouched
- * so the inset diff markers keep working. */
+/* 错误、警告、成功徽标靠填充色与文字色传达语义，外层轮廓被去除。
+ * box-shadow 保持不变，差分行的内嵌竖条因而继续生效。 */
 [aria-invalid="true"],
 [data-state="error"],
 [data-state="failed"],
@@ -136,11 +122,10 @@ select:focus,
 }
 
 /* ---------------------------------------------------------------------------
- * 3. Interaction and motion
+ * 3. 交互与动效
  * ------------------------------------------------------------------------- */
 
-/* Material 3 animates colour changes on the standard curve and reserves the
- * emphasized curves for movement. */
+/* Material 3 用标准曲线处理颜色过渡，强调曲线留给位移。 */
 button,
 [role="button"],
 [role="switch"],

@@ -1,18 +1,19 @@
 /**
- * One-off survey helper: list CSS rules that still paint a border.
+ * 排查工具：列出 app.asar 中命中指定模式的 CSS 规则。
  *
- * Read-only against the installed app.asar; it exists so the theme author can
- * confirm that a border seen in a screenshot comes from a rule the theme does
- * not clear, instead of guessing.
+ * 读取已安装 Harness 的 app.asar，解析其目录树并检索 CSS 声明，输出命中的选择器
+ * 与声明块。
+ *
+ *   node build/scan-css.mjs <body-pattern> [selector-pattern] [limit]
  */
 
 import { readFileSync } from 'node:fs';
 
-// Point this at the installed Harness bundle on your own machine:
+// 已安装 Harness 的 app.asar 路径，由环境变量 DSH_ASAR 指定。
 //   $env:DSH_ASAR = '<install>/resources/app.asar'
 const ASAR = process.env.DSH_ASAR;
 if (!ASAR) {
-  throw new Error('set DSH_ASAR to the installed app.asar before running this helper');
+  throw new Error('运行前请把 DSH_ASAR 设成已安装的 app.asar 路径');
 }
 const buffer = readFileSync(ASAR);
 
@@ -20,7 +21,7 @@ const headerSize = buffer.readUInt32LE(12);
 const tree = JSON.parse(buffer.subarray(16, 16 + headerSize).toString('utf8'));
 const dataOffset = 16 + Math.ceil(headerSize / 4) * 4;
 
-/** Flatten the asar tree into readable [path, entry] pairs. */
+/** 把 app.asar 的目录树展开为 [路径, 条目] 列表。 */
 function walk(node, prefix, out) {
   for (const [name, entry] of Object.entries(node.files ?? {})) {
     const path = `${prefix}/${name}`;
@@ -34,7 +35,7 @@ function walk(node, prefix, out) {
 
 const entries = walk(tree, '', []);
 const cssFiles = entries.filter(([path]) => path.endsWith('.css'));
-process.stdout.write(`css files: ${cssFiles.length}\n`);
+process.stdout.write(`css 文件数：${cssFiles.length}\n`);
 
 const pattern = new RegExp(process.argv[2] ?? 'border', 'u');
 const selectorFilter = new RegExp(process.argv[3] ?? '.', 'u');
@@ -54,4 +55,4 @@ for (const [path, entry] of cssFiles) {
     if (++shown >= Number(process.argv[4] ?? 20)) process.exit(0);
   }
 }
-process.stdout.write(`\nmatches: ${shown}\n`);
+process.stdout.write(`\n命中：${shown}\n`);

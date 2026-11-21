@@ -1,22 +1,18 @@
-# Vendored Material Color Utilities
+# 内置的 Material Color Utilities
 
-This is `@material/material-color-utilities@0.4.0` (Apache-2.0, see `LICENSE`),
-copied here so that the palette pipeline in `build/generate-palettes.mjs` runs
-with nothing installed and no network access.
+本目录是 `@material/material-color-utilities@0.4.0`（Apache-2.0，见 `LICENSE`）的副本，
+使构建流程无需安装依赖或联网即可运行。
 
-## Why a patched copy
+## 本地改动
 
-The published package is ESM, but its relative imports omit the `.js`
-extension (`import { ... } from './dynamiccolor/dynamic_color'`). Node's ESM
-resolver rejects that with `ERR_MODULE_NOT_FOUND`, so every relative specifier
-has been rewritten to carry an explicit `.js`. That rewrite is the **only**
-change; no algorithmic edits were made.
+上游包采用 ESM，但相对 import 省略了 `.js` 后缀（如 `from './dynamiccolor/dynamic_color'`），
+Node 的 ESM 解析器会报 `ERR_MODULE_NOT_FOUND`。本副本为每个相对路径补上显式 `.js` 后缀。
+除此之外与上游一致，算法未作修改。
 
-## Refreshing
+## 更新方式
 
-`build/vendor-mcu.mjs` reproduces this directory from a freshly installed
-package. Install it wherever writable — a scratch directory outside the repo is
-fine — and pass its path:
+`build/vendor-mcu.mjs` 可从一份已安装的包重建本目录。将包安装到任意可写路径后，显式传入
+该路径：
 
 ```sh
 cmd /c "npm install @material/material-color-utilities@0.4.0 --no-audit --no-fund --ignore-scripts --cache %TEMP%\mcu-cache --prefix %TEMP%\mcu"
@@ -24,20 +20,17 @@ node build/vendor-mcu.mjs %TEMP%\mcu\node_modules\@material\material-color-utili
 node build/verify.mjs
 ```
 
-The script rewrites every `.js` file through the extension patch and copies
-`LICENSE` and `package.json` across; it prints `vendored N files, patched M`.
-With no argument it falls back to `.tmp/mcu/node_modules/@material/material-color-utilities`.
+脚本为所有 `.js` 补齐后缀，并复制 `LICENSE` 与 `package.json`，输出复制与修改的文件数。
+路径参数不可省略。
 
-## What consumes it
+## 使用范围
 
-Only the build. `build/generate-palettes.mjs` imports
-`vendor/material-color-utilities/index.js` to turn each seed colour into an M3
-`DynamicScheme` and flatten the result into
-[`src/generated/palettes.js`](../../src/generated/palettes.js). The shipped
-plugin never loads any of this — it only slices pre-computed hex strings.
+仅用于构建。`build/generate-palettes.mjs` 导入 `vendor/material-color-utilities/index.js`，
+将每个种子色转换为 M3 `DynamicScheme`，再摊平为
+[`src/generated/palettes.js`](../../src/generated/palettes.js)。发布的插件不加载本目录，
+只读取现成的十六进制字符串。
 
-## License
+## 协议
 
-Material Color Utilities is licensed under the Apache License 2.0. The original
-license text is preserved verbatim in [`LICENSE`](LICENSE). This repository's
-own code is MIT (see the root `README.md`).
+Material Color Utilities 采用 Apache License 2.0，原始协议文本见 [`LICENSE`](LICENSE)。
+本仓库自身代码采用 MIT，见根目录 [`LICENSE`](../../LICENSE)。

@@ -1,17 +1,16 @@
 /**
- * Offline check of the Host half.
+ * Host 半边的离线检查。
  *
- * The point is not to prove that Windows returns an accent colour — that only
- * happens on a real desktop — but to prove that every failure path ends in a
- * well-formed `{ ok: false, reason }` instead of a throw, and that the route
- * answers with the right status codes.
+ * 验证每条失败路径均以形状完整的 `{ ok: false, reason }` 结束，不抛错，并校验路由
+ * 返回的 HTTP 状态码。Windows 是否返回强调色只能在真实桌面环境中验证，不在本检查
+ * 范围内。
  */
 
 import { strict as assert } from 'node:assert';
 
 import { apply, inject } from '../plugin/index.js';
 
-assert.deepEqual(inject, ['webServer'], 'webServer must be a hard dependency');
+assert.deepEqual(inject, ['webServer'], 'webServer 必须是硬依赖');
 
 let registered = null;
 let disposed = 0;
@@ -24,7 +23,7 @@ const ctx = {
   },
   webServer: {
     getOrigin() {
-      throw new Error('listen has not bound a port yet');
+      throw new Error('listen 尚未绑定端口');
     },
     register(route) {
       registered = route;
@@ -36,11 +35,11 @@ const ctx = {
 };
 
 apply(ctx);
-assert.ok(registered !== null, 'apply must register one route');
+assert.ok(registered !== null, 'apply 必须注册一条路由');
 assert.equal(registered.kind, 'exact');
 assert.equal(registered.path, '/stars-material/palette');
 
-/** Minimal stand-in for the node request/response pair. */
+/** Node.js 请求/响应对象的最小替身。 */
 function exchange(headers, url = '/stars-material/palette') {
   const state = { statusCode: 0, headers: {}, body: '' };
   const request = { headers, method: 'GET', url };
@@ -63,21 +62,20 @@ function exchange(headers, url = '/stars-material/palette') {
 
 const sameOrigin = exchange({ host: '127.0.0.1:12345', origin: 'http://127.0.0.1:12345' });
 await registered.handler(sameOrigin.request, sameOrigin.response);
-assert.equal(sameOrigin.state.statusCode, 200, 'same-origin request must be served');
+assert.equal(sameOrigin.state.statusCode, 200, '同源请求必须被受理');
 assert.equal(sameOrigin.state.headers['cache-control'], 'no-store');
 assert.match(sameOrigin.state.headers['content-type'], /application\/json/u);
 
 const crossOrigin = exchange({ host: '127.0.0.1:12345', origin: 'http://evil.example' });
 await registered.handler(crossOrigin.request, crossOrigin.response);
-assert.equal(crossOrigin.state.statusCode, 403, 'cross-origin request must be refused');
+assert.equal(crossOrigin.state.statusCode, 403, '跨站请求必须被拒');
 assert.equal(crossOrigin.state.body, 'forbidden');
 
 const noHost = exchange({});
 await registered.handler(noHost.request, noHost.response);
-assert.equal(noHost.state.statusCode, 403, 'a request with no Host header must be refused');
+assert.equal(noHost.state.statusCode, 403, '没有 Host 头的请求必须被拒');
 
-// Whatever the sandbox does with `reg.exe`, the payload has to be a decision the
-// Client can act on: either a palette or a reason string.
+// 答复始终保持 Client 可处理的形状：要么一份配色，要么一条原因。
 const payload = JSON.parse(sameOrigin.state.body);
 assert.equal(typeof payload.ok, 'boolean');
 if (payload.ok) {
@@ -86,11 +84,10 @@ if (payload.ok) {
   assert.equal(payload.dark.length, 270);
 } else {
   assert.equal(typeof payload.reason, 'string');
-  assert.ok(payload.reason.length > 0, 'a failure must explain itself');
+  assert.ok(payload.reason.length > 0, '失败时必须给出原因');
 }
 
-// A second request inside the cache window must not restart the reader; the
-// observable proof is that the body is byte-identical.
+// 缓存窗口内的第二次请求不得重复读取；响应体逐字节相同即为证据。
 const again = exchange({ host: '127.0.0.1:12345', origin: 'http://127.0.0.1:12345' });
 await registered.handler(again.request, again.response);
 assert.equal(again.state.body, sameOrigin.state.body, 'the answer must be cached');
@@ -128,10 +125,10 @@ await registered.handler(crossSeed.request, crossSeed.response);
 assert.equal(crossSeed.state.statusCode, 403, 'the custom seed route must keep the origin guard');
 
 for (const dispose of effects) dispose();
-assert.equal(disposed, 1, 'disposing the effect must remove the route');
+assert.equal(disposed, 1, '移除 effect 时必须一并移除路由');
 
 // ---------------------------------------------------------------------------
-// A bound listener: `getOrigin()` answers, so the exact-host comparison runs.
+// 端口已绑定：`getOrigin()` 返回有效值，精确比对 Host 的分支随之执行。
 // ---------------------------------------------------------------------------
 
 const boundEffects = [];
@@ -172,39 +169,38 @@ async function statusOf(headers) {
   return exchange.state.statusCode;
 }
 
-assert.equal(await statusOf({ host: '127.0.0.1:12345' }), 200, 'a request from the harness itself must be served');
+assert.equal(await statusOf({ host: '127.0.0.1:12345' }), 200, 'Harness 发起的请求必须被受理');
 assert.equal(
   await statusOf({ host: '127.0.0.1:12345', origin: 'http://127.0.0.1:12345' }),
   200,
-  'the harness origin must be accepted',
+  'Harness 的 origin 必须被接受',
 );
 assert.equal(
   await statusOf({ host: 'localhost:12345', origin: 'http://localhost:12345' }),
   200,
-  'the localhost form of the same listener must be accepted',
+  '同一监听器的 localhost 写法必须被接受',
 );
-// The DNS-rebinding hole: another site reaches the loopback listener with a
-// matching Host, so its Origin is the only thing that gives it away.
+// DNS 重绑风险：外站页面可携带匹配的 Host 访问环回端口，此时只有 Origin 能区分来源。
 assert.equal(
   await statusOf({ host: '127.0.0.1:12345', origin: 'http://evil.example' }),
   403,
-  'a foreign Origin must be refused even when Host matches',
+  'Host 匹配但 Origin 为外站时必须拒绝',
 );
 assert.equal(
   await statusOf({ host: '127.0.0.1:12345', origin: 'http://127.0.0.1:9999' }),
   403,
-  'another port on loopback is a different sender',
+  '环回端口不同即视为不同发送方',
 );
 assert.equal(
   await statusOf({ host: 'attacker.example:12345' }),
   403,
-  'a mismatched Host must be refused',
+  'Host 不匹配时必须拒绝',
 );
 
 for (const dispose of boundEffects) dispose();
 
-console.log(`host route        ${registered.kind} ${registered.path}`);
-console.log(`origin fallback   getOrigin() throwing is survivable`);
-console.log(`origin bound      foreign Origin refused, loopback accepted`);
-console.log(`payload           ${payload.ok ? `seed ${payload.seed}` : `declined: ${payload.reason}`}`);
-console.log('host-check OK');
+console.log(`路由            ${registered.kind} ${registered.path}`);
+console.log(`取 origin 失败   仍返回结构化答复`);
+console.log(`origin 已绑定    外站 Origin 被拒，环回请求放行`);
+console.log(`答复             ${payload.ok ? `种子色 ${payload.seed}` : `拒绝：${payload.reason}`}`);
+console.log('host-check 通过');

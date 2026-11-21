@@ -1,8 +1,6 @@
-"""Attribute every large flat colour in a DSH screenshot to an exact Material 3
-role, and prove the stock DSH palette is gone.
+"""统计截图中大面积平色对应的 Material 3 角色，以及原装调色板的残留像素量。
 
-Read-only: reads a PNG path plus the palette table printed by
-build/print-palette.mjs and reports the mapping. It never touches the app.
+参数依次为截图路径、build/print-palette.mjs 输出的配色表路径。
 """
 
 from __future__ import annotations
@@ -13,7 +11,7 @@ from collections import Counter
 from PIL import Image
 
 STOCK = {
-    # values shipped in design-platform.css for the stock light theme
+    # design-platform.css 中原装浅色主题定义的颜色值（深色主题下会被覆盖）
     "neutral-bluish-00": (0xFF, 0xFF, 0xFF),
     "neutral-bluish-50": (0xF9, 0xFA, 0xFB),
     "neutral-bluish-75": (0xF1, 0xF3, 0xF5),
@@ -46,10 +44,10 @@ def main() -> int:
     image = Image.open(path).convert("RGB")
     counts = Counter(image.get_flattened_data())
     total = image.size[0] * image.size[1]
-    print(f"image {image.size[0]}x{image.size[1]} ({total} px)\n")
+    print(f"图片 {image.size[0]}x{image.size[1]}（{total} px）\n")
 
     matched_px = 0
-    print("-- flat colours that are exact Material 3 roles --")
+    print("-- 与某个 Material 3 角色完全一致的平色 --")
     for rgb, n in counts.most_common(40):
         roles = role_by_hex.get(rgb)
         if roles is None:
@@ -58,22 +56,22 @@ def main() -> int:
         share = 100.0 * n / total
         print(f"  {hexs(rgb)}  {n:>8} px  {share:5.2f}%  <- {', '.join(roles)}")
 
-    print(f"\nmaterial 3 role pixels: {matched_px} ({100.0 * matched_px / total:.2f}%)\n")
+    print(f"\nMaterial 3 角色像素：{matched_px}（{100.0 * matched_px / total:.2f}%）\n")
 
-    print("-- stock DSH colours still on screen --")
+    print("-- 截图中残留的原装 DSH 颜色 --")
     remaining = 0
     for name, rgb in STOCK.items():
         n = counts.get(rgb, 0)
         remaining += n
         print(f"  {name:<22} {hexs(rgb)}  {n:>8} px")
-    print(f"\nstock palette pixels: {remaining} ({100.0 * remaining / total:.2f}%)")
+    print(f"\n原装调色板像素：{remaining}（{100.0 * remaining / total:.2f}%）")
 
-    print("\n-- unmatched colours above 1% of the screen --")
+    print("\n-- 占屏 1% 以上且不属于任何角色的颜色 --")
     for rgb, n in counts.most_common(40):
         share = 100.0 * n / total
         if share < 1.0 or rgb in role_by_hex:
             continue
-        print(f"  {hexs(rgb)}  {n:>8} px  {share:5.2f}%  (blend / overlay / artwork)")
+        print(f"  {hexs(rgb)}  {n:>8} px  {share:5.2f}%（混色 / 遮罩 / 图形）")
     return 0
 
 

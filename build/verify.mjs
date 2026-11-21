@@ -1,10 +1,10 @@
 /**
- * Run every check that can be run without a browser, in one go.
+ * 顺序执行所有不依赖浏览器的检查。
  *
  *   node build/verify.mjs
  *
- * Each step prints its own report; the first failure sets a non-zero exit code
- * and stops the run, because later checks assume the earlier ones passed.
+ * 各步骤分别输出报告。任一步骤失败时以非零状态退出并中止后续步骤；
+ * 后续步骤以前序步骤通过为前提。
  */
 
 import { spawnSync } from 'node:child_process';
@@ -15,13 +15,13 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
 
 const STEPS = [
-  ['generate palettes', 'build/generate-palettes.mjs'],
-  ['bundle host', 'build/bundle-host.mjs'],
-  ['bundle client', 'build/bundle-client.mjs'],
-  ['token coverage', 'build/validate-coverage.mjs'],
-  ['manifest', 'build/validate-manifest.mjs'],
-  ['behaviour', 'build/self-check.mjs'],
-  ['host route', 'build/host-check.mjs'],
+  ['生成调色板', 'build/generate-palettes.mjs'],
+  ['打包 Host 端', 'build/bundle-host.mjs'],
+  ['打包 Client 端', 'build/bundle-client.mjs'],
+  ['令牌覆盖', 'build/validate-coverage.mjs'],
+  ['插件清单', 'build/validate-manifest.mjs'],
+  ['行为自检', 'build/self-check.mjs'],
+  ['Host 路由', 'build/host-check.mjs'],
 ];
 
 for (const [label, script] of STEPS) {
@@ -31,9 +31,9 @@ for (const [label, script] of STEPS) {
     stdio: 'inherit',
   });
   if (result.status !== 0) {
-    process.stderr.write(`\nFAILED at "${label}" (${script})\n`);
+    process.stderr.write(`\n"${label}" 失败（${script}）\n`);
     process.exit(result.status ?? 1);
   }
 }
 
-process.stdout.write('\nall checks passed\n');
+process.stdout.write('\n全部检查通过\n');

@@ -1,18 +1,17 @@
 /**
- * Manifest and packaging check for the bundle in `plugin/`.
+ * `plugin/` 中 bundle 的 manifest 与打包检查。
  *
- * Verifies the things a browser cannot tell you and a user would only discover
- * after installing:
+ * 校验浏览器无法识别、安装后才会显现的问题：
  *
- *   - `package.json` declares the fields the loader needs (`name`, `type`,
- *     `exports`, `dsh.bundle.patch`, `dsh.client`) and never depends on a
- *     Harness client package at runtime;
- *   - every `exports`/`files` entry resolves to a real file in the package;
- *   - `cordis.patch.yml` inserts exactly one row whose name matches the package;
- *   - both locale files parse, carry `meta.title` / `meta.description` in
- *     sentence case, and expose the same key set;
- *   - the icon is a well-formed SVG with a `viewBox`, well under the size cap;
- *   - the Client bundle only `require`s modules from the allowed list.
+ *   - `package.json` 声明加载器所需字段（`name`、`type`、`exports`、
+ *     `dsh.bundle.patch`、`dsh.client`），且运行时不依赖任何 Harness 客户端包；
+ *   - 每个 `exports`/`files` 条目均指向包内实际存在的文件；
+ *   - `cordis.patch.yml` 恰好插入一行，且名字与包名一致；
+ *   - 两份 locale 文件均可解析，`meta.title` / `meta.description` 符合句首大写，
+ *     且暴露同一套键；
+ *   - 图标为带 `viewBox` 的合法 SVG，且体积未超上限；
+ *   - Client bundle 仅 `require` 白名单内的模块；
+ *   - 项目声明或依赖的每一份 licence 文本均存在于磁盘。
  *
  *   node build/validate-manifest.mjs
  */
@@ -39,7 +38,7 @@ async function readJson(path) {
   try {
     return JSON.parse(text);
   } catch (error) {
-    failures.push(`${path}: not valid JSON (${error.message})`);
+    failures.push(`${path}: 不是合法的 JSON（${error.message}）`);
     return {};
   }
 }
@@ -59,30 +58,30 @@ async function exists(path) {
 
 const pkg = await readJson(resolve(PKG_DIR, 'package.json'));
 
-check(typeof pkg.name === 'string' && pkg.name.length > 0, 'package.json: missing "name"');
-check(/^[a-z0-9][a-z0-9._-]*$/u.test(pkg.name ?? ''), `package.json: "name" is not a valid package id`);
-check(typeof pkg.version === 'string' && /^\d+\.\d+\.\d+/u.test(pkg.version), 'package.json: missing semver "version"');
-check(pkg.type === 'module', 'package.json: "type" must be "module"');
-check(pkg.private === true, 'package.json: expected "private": true for a bundled plugin');
-check(pkg.dependencies === undefined, 'package.json: a bundle must not declare dependencies');
-check(pkg.devDependencies === undefined, 'package.json: a bundle must not declare devDependencies');
+check(typeof pkg.name === 'string' && pkg.name.length > 0, 'package.json：缺少 "name"');
+check(/^[a-z0-9][a-z0-9._-]*$/u.test(pkg.name ?? ''), `package.json："name" 不是合法的包 id`);
+check(typeof pkg.version === 'string' && /^\d+\.\d+\.\d+/u.test(pkg.version), 'package.json：缺少 semver 格式的 "version"');
+check(pkg.type === 'module', 'package.json："type" 必须是 "module"');
+check(pkg.private === true, 'package.json：作为打包发出的插件，应当写 "private": true');
+check(pkg.dependencies === undefined, 'package.json：插件包不能声明 dependencies');
+check(pkg.devDependencies === undefined, 'package.json：插件包不能声明 devDependencies');
 
 const dsh = pkg.dsh ?? {};
-check(typeof dsh.bundle?.patch === 'string', 'package.json: missing dsh.bundle.patch');
-check(dsh.client?.platform === 'web', 'package.json: dsh.client.platform must be "web"');
-check(Array.isArray(dsh.client?.inject), 'package.json: dsh.client.inject must be an array');
+check(typeof dsh.bundle?.patch === 'string', 'package.json：缺少 dsh.bundle.patch');
+check(dsh.client?.platform === 'web', 'package.json：dsh.client.platform 必须是 "web"');
+check(Array.isArray(dsh.client?.inject), 'package.json：dsh.client.inject 必须是数组');
 for (const entry of dsh.client?.inject ?? []) {
   check(
     !FORBIDDEN_PREFIXES.some((prefix) => entry.startsWith(prefix)) || entry.startsWith('@deepseek-ai/dsh-client-ui-'),
-    `package.json: dsh.client.inject entry "${entry}" is not a UI package`,
+    `package.json：dsh.client.inject 里的 "${entry}" 不是 UI 包`,
   );
 }
 
 const exportsMap = pkg.exports ?? {};
-check(exportsMap['.'] !== undefined, 'package.json: exports["."] is required');
-check(exportsMap['./client'] !== undefined, 'package.json: exports["./client"] is required');
-check(exportsMap['./icon'] !== undefined, 'package.json: exports["./icon"] is required');
-check(exportsMap['./locale/*.json'] !== undefined, 'package.json: exports["./locale/*.json"] is required');
+check(exportsMap['.'] !== undefined, 'package.json：必须有 exports["."]');
+check(exportsMap['./client'] !== undefined, 'package.json：必须有 exports["./client"]');
+check(exportsMap['./icon'] !== undefined, 'package.json：必须有 exports["./icon"]');
+check(exportsMap['./locale/*.json'] !== undefined, 'package.json：必须有 exports["./locale/*.json"]');
 
 const targets = new Set();
 for (const value of Object.values(exportsMap)) {
@@ -92,11 +91,40 @@ for (const entry of pkg.files ?? []) targets.add(entry.replace(/^\.\//, ''));
 
 for (const target of targets) {
   if (target.includes('*')) continue;
-  check(await exists(resolve(PKG_DIR, target)), `package.json: "${target}" is listed but missing from the package`);
+  check(await exists(resolve(PKG_DIR, target)), `package.json："${target}" 已被列出，但包中不存在对应文件`);
 }
 
 for (const required of ['index.js', 'client.js', 'cordis.patch.yml', 'icon.svg', 'locale/en.json', 'locale/zh.json']) {
-  check(await exists(resolve(PKG_DIR, required)), `package is missing ${required}`);
+  check(await exists(resolve(PKG_DIR, required)), `包内缺少 ${required}`);
+}
+
+// ---------------------------------------------------------------------------
+// Licence
+// ---------------------------------------------------------------------------
+
+// `package.json` 声明 MIT，vendor 目录再分发 MIT 代码，因此两处声明都需要随文件提供
+// 对应的 licence 文本。插件包单独保留一份，因为其安装环境中没有整个仓库。
+check(pkg.license === 'MIT', `package.json：应当是 "license": "MIT"，实际为 ${JSON.stringify(pkg.license)}`);
+check(
+  (pkg.files ?? []).some((entry) => entry.replace(/^\.\//, '') === 'LICENSE'),
+  'package.json："LICENSE" 必须列进 "files"，才能随插件包一起发出去',
+);
+
+const LICENCES = [
+  ['LICENSE', 'MIT'],
+  ['plugin/LICENSE', 'MIT'],
+  ['vendor/dsh-survey/LICENSE', 'MIT'],
+];
+for (const [path, expected] of LICENCES) {
+  const full = resolve(REPO, path);
+  if (!(await exists(full))) {
+    check(false, `缺少 licence 文件：${path}`);
+    continue;
+  }
+  const text = await readFile(full, 'utf8');
+  const heading = text.split('\n').find((line) => line.trim() !== '') ?? '';
+  check(heading.includes(expected), `${path}：首行 "${heading}" 没有写出 ${expected} 许可`);
+  check(/Permission is hereby granted/u.test(text), `${path}：没有 ${expected} 的授权原文（Permission is hereby granted）`);
 }
 
 // ---------------------------------------------------------------------------
@@ -107,21 +135,21 @@ const patchPath = resolve(PKG_DIR, dsh.bundle?.patch ?? 'cordis.patch.yml');
 if (await exists(patchPath)) {
   const patch = await readFile(patchPath, 'utf8');
   const rows = [...patch.matchAll(/^\s*-\s*id:\s*(\S+)\s*\n\s*name:\s*(\S+)\s*$/gmu)];
-  check(rows.length === 1, `cordis.patch.yml: expected exactly one insert row, found ${rows.length}`);
+  check(rows.length === 1, `cordis.patch.yml：应当恰好一行插入记录，实际 ${rows.length} 行`);
   if (rows.length === 1) {
     const [, id, name] = rows[0];
-    check(id === pkg.name, `cordis.patch.yml: id "${id}" does not match the package name`);
+    check(id === pkg.name, `cordis.patch.yml：id "${id}" 与包名不一致`);
     check(
       name === pkg.name || name === `'${pkg.name}'`,
-      `cordis.patch.yml: name "${name}" does not resolve to the package`,
+      `cordis.patch.yml：name "${name}" 与包名不匹配`,
     );
   }
 } else {
-  failures.push('cordis.patch.yml is missing');
+  failures.push('缺少 cordis.patch.yml');
 }
 
 // ---------------------------------------------------------------------------
-// Locale files
+// Locale 文件
 // ---------------------------------------------------------------------------
 
 const localeDir = resolve(PKG_DIR, 'locale');
@@ -141,52 +169,52 @@ function flatten(object, prefix = '') {
 const enFlat = flatten(en);
 const zhFlat = flatten(zh);
 
-check(typeof enFlat['meta.title'] === 'string' && enFlat['meta.title'].length > 0, 'en.json: missing meta.title');
+check(typeof enFlat['meta.title'] === 'string' && enFlat['meta.title'].length > 0, 'en.json：缺少 meta.title');
 check(
   typeof enFlat['meta.description'] === 'string' && enFlat['meta.description'].length > 0,
-  'en.json: missing meta.description',
+  'en.json：缺少 meta.description',
 );
-check(typeof zhFlat['meta.title'] === 'string' && zhFlat['meta.title'].length > 0, 'zh.json: missing meta.title');
+check(typeof zhFlat['meta.title'] === 'string' && zhFlat['meta.title'].length > 0, 'zh.json：缺少 meta.title');
 check(
   typeof zhFlat['meta.description'] === 'string' && zhFlat['meta.description'].length > 0,
-  'zh.json: missing meta.description',
+  'zh.json：缺少 meta.description',
 );
 
-// Sentence case: no Title Case Headings, no trailing full stop.
+// 句首大写指仅首字母大写，其余词保持小写，且末尾不带句号。
 for (const [key, value] of Object.entries(enFlat)) {
   if (key === 'meta.title' || key === 'nav.title') {
     const words = value.split(' ').filter((word) => /^[A-Za-z]/.test(word));
     const inner = words.slice(1);
     check(
       inner.every((word) => !/^[A-Z][a-z]/.test(word)),
-      `en.json: "${key}" is not sentence case ("${value}")`,
+      `en.json："${key}" 不是句首大写（"${value}"）`,
     );
   }
-  if (key === 'meta.title') check(!value.endsWith('.'), 'en.json: meta.title must not end with a full stop');
+  if (key === 'meta.title') check(!value.endsWith('.'), 'en.json：meta.title 末尾不能带句号');
 }
 
 const enKeys = Object.keys(enFlat).sort();
 const zhKeys = Object.keys(zhFlat).sort();
-check(enKeys.join(',') === zhKeys.join(','), 'locale files have different key sets');
+check(enKeys.join(',') === zhKeys.join(','), '两份 locale 文件的键集合不一致');
 for (const key of enKeys) {
-  check(typeof zhFlat[key] === 'string' && zhFlat[key].length > 0, `zh.json: "${key}" is empty`);
+  check(typeof zhFlat[key] === 'string' && zhFlat[key].length > 0, `zh.json："${key}" 是空的`);
 }
 
 // ---------------------------------------------------------------------------
-// Icon
+// 图标
 // ---------------------------------------------------------------------------
 
 const iconPath = resolve(PKG_DIR, 'icon.svg');
 if (await exists(iconPath)) {
   const info = await stat(iconPath);
-  check(info.size <= ICON_LIMIT, `icon.svg is ${info.size} B, above the 256 KiB cap`);
+  check(info.size <= ICON_LIMIT, `icon.svg 有 ${info.size} B，超过 256 KiB 上限`);
   const icon = await readFile(iconPath, 'utf8');
-  check(/^<svg\b/u.test(icon.trim()), 'icon.svg: root element must be <svg>');
-  check(icon.includes('xmlns="http://www.w3.org/2000/svg"'), 'icon.svg: missing the SVG namespace');
-  check(/viewBox="[^"]+"/u.test(icon), 'icon.svg: missing a viewBox');
-  check(!/<script\b/iu.test(icon), 'icon.svg: must not contain <script>');
-  check(!/<style\b/iu.test(icon), 'icon.svg: must not contain <style>');
-  check(!/href="(?:https?:)?\/\//u.test(icon), 'icon.svg: must not reference remote resources');
+  check(/^<svg\b/u.test(icon.trim()), 'icon.svg：根元素必须是 <svg>');
+  check(icon.includes('xmlns="http://www.w3.org/2000/svg"'), 'icon.svg：缺少 SVG namespace');
+  check(/viewBox="[^"]+"/u.test(icon), 'icon.svg：缺少 viewBox');
+  check(!/<script\b/iu.test(icon), 'icon.svg：不能包含 <script>');
+  check(!/<style\b/iu.test(icon), 'icon.svg：不能包含 <style>');
+  check(!/href="(?:https?:)?\/\//u.test(icon), 'icon.svg：不能引用远程资源');
 }
 
 // ---------------------------------------------------------------------------
@@ -198,24 +226,23 @@ if (await exists(clientPath)) {
   const client = await readFile(clientPath, 'utf8');
   check(
     client.includes('window.__ModuleLoader__.load('),
-    'client.js: must register itself through window.__ModuleLoader__.load',
+    'client.js：必须通过 window.__ModuleLoader__.load 自注册',
   );
   check(
     client.includes(`id: ${JSON.stringify(pkg.name)}`) || client.includes(`id: '${pkg.name}'`),
-    'client.js: the registered id must be the package name',
+    'client.js：注册的 id 必须是包名',
   );
   const requires = [...client.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/gu)].map((match) => match[1]);
   const unexpected = [...new Set(requires)].filter((id) => !ALLOWED_REQUIRES.has(id));
-  check(unexpected.length === 0, `client.js requires modules outside the allowed list: ${unexpected.join(', ')}`);
+  check(unexpected.length === 0, `client.js require 了白名单之外的模块：${unexpected.join(', ')}`);
 
-  // The bundle is a browser script: an ESM import/export would fail to parse.
-  check(!/^\s*import\s[\s\S]*?from\s+["']/mu.test(client), 'client.js: contains an ESM import statement');
-  check(!/^\s*export\s+(?:const|let|var|function|class|default)\b/mu.test(client), 'client.js: contains an ESM export statement');
+  // 该 bundle 为浏览器脚本；一条 ESM import/export 语句就会导致解析失败。
+  check(!/^\s*import\s[\s\S]*?from\s+["']/mu.test(client), 'client.js：出现了 ESM import 语句');
+  check(!/^\s*export\s+(?:const|let|var|function|class|default)\b/mu.test(client), 'client.js：出现了 ESM export 语句');
 
-  // Hard-coded colours are only acceptable where they cannot follow the theme:
-  // the eight seed swatches drawn in the settings page, and the artwork literals
-  // in the token map. Anything else means a palette was pasted into the bundle,
-  // which would stop following the active scheme.
+  // 硬编码颜色仅在无法跟随主题的位置允许：设置页中的 8 个种子色块，以及 token
+  // map 中的插画字面量。其余情况意味着有一份配色被复制进 bundle，无法跟随当前
+  // 配色方案变化。
   const { PRESETS } = await import(pathToFileURL(resolve(REPO, 'src/parts/palette-spec.js')).href);
   const { LITERAL_TOKENS } = await import(pathToFileURL(resolve(REPO, 'src/parts/token-map.js')).href);
   const allowedHex = new Set([
@@ -226,18 +253,18 @@ if (await exists(clientPath)) {
   const unexpectedHex = hexLiterals.filter((value) => !allowedHex.has(value));
   check(
     unexpectedHex.length === 0,
-    `client.js: hard-coded colours outside the seed/artwork allowlist: ${unexpectedHex.join(', ')}`,
+    `client.js：出现了种子色/插画白名单之外的硬编码颜色：${unexpectedHex.join(', ')}`,
   );
 }
 
 if (failures.length > 0) {
-  console.error(`manifest check FAILED (${failures.length})`);
+  console.error(`manifest 校验失败（${failures.length} 项）`);
   for (const failure of failures) console.error(`  - ${failure}`);
   process.exitCode = 1;
 } else {
   console.log(`package       ${pkg.name} ${pkg.version}`);
-  console.log(`files         ${[...targets].length} declared targets resolve`);
-  console.log(`locales       en + zh, ${enKeys.length} keys aligned`);
-  console.log(`client        ${'no Harness client package requires'}`);
+  console.log(`files         ${[...targets].length} 个声明目标都能解析`);
+  console.log(`locales       en + zh，${enKeys.length} 个键对齐`);
+  console.log(`client        ${'没有 require 任何 Harness 客户端包'}`);
   console.log('manifest OK');
 }
