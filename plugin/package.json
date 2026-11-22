@@ -1,6 +1,6 @@
 {
   "name": "dsh-stars-material",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "description": "Material 3 / Material You theme for the DeepSeek Harness web UI.",
