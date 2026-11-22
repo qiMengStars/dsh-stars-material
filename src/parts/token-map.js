@@ -31,7 +31,11 @@ export const ROLE_TOKENS = {
   '--dsw-alias-bg-layer-1': 'surfaceContainerLow',
   '--dsw-alias-bg-layer-2': 'surfaceContainer',
   '--dsw-alias-bg-layer-3': 'surfaceContainerHigh',
-  '--dsw-alias-bg-module-platform': 'surfaceContainer',
+  // 浮在页面上的控件底（下拉 pill、字号步进器、外观三选一的选中格）。该令牌原先取
+  // `surfaceContainer`，与面板底（`--dsw-alias-bg-layer-2`）同值，控件落在面板上时
+  // 完全没有底色。M3 的填充型控件要比其所在表面高一档容器色，这里取阶梯顶端的
+  // `surfaceContainerHighest`：比面板高两档，比 `--dsw-alias-bg-layer-3` 再高一档。
+  '--dsw-alias-bg-module-platform': 'surfaceContainerHighest',
   '--dsw-alias-bg-multi-select': 'surfaceContainerHigh',
   '--dsw-alias-bg-overlay': 'surfaceContainerHighest',
 

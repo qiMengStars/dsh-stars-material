@@ -189,7 +189,11 @@ const ROLE_TOKENS = {
   '--dsw-alias-bg-layer-1': 'surfaceContainerLow',
   '--dsw-alias-bg-layer-2': 'surfaceContainer',
   '--dsw-alias-bg-layer-3': 'surfaceContainerHigh',
-  '--dsw-alias-bg-module-platform': 'surfaceContainer',
+  // 浮在页面上的控件底（下拉 pill、字号步进器、外观三选一的选中格）。该令牌原先取
+  // `surfaceContainer`，与面板底（`--dsw-alias-bg-layer-2`）同值，控件落在面板上时
+  // 完全没有底色。M3 的填充型控件要比其所在表面高一档容器色，这里取阶梯顶端的
+  // `surfaceContainerHighest`：比面板高两档，比 `--dsw-alias-bg-layer-3` 再高一档。
+  '--dsw-alias-bg-module-platform': 'surfaceContainerHighest',
   '--dsw-alias-bg-multi-select': 'surfaceContainerHigh',
   '--dsw-alias-bg-overlay': 'surfaceContainerHighest',
 
@@ -534,6 +538,22 @@ tr[data-turn-start="true"]:not(:first-child) > td {
  * 更重（8% 状态层叠在侧栏色上，深于该行的静息填充）。Material 3 以角色区分：
  * 悬停是表面上的状态层，选中是容器色调。 */
 [role="treeitem"][aria-selected="true"] {
+  background-color: var(--dsh-m3-secondary-container);
+}
+
+/* 设置页外观三选一：产品的方块靠 border-l4 画出 0.5dp 轮廓、靠 bg-module-platform
+ * 给选中项上色。border-l4 在本主题中被清零，三个方块于是只剩图标与文字，与页面上
+ * 的普通文本无异——选中项虽有容器色调的填充，轮廓仍不可省，否则无从判断这是三个
+ * 可点的方块。Material 3 的分段按钮用 1dp outline 作容器轮廓、二级容器色作选中段
+ * 的填充，这里照此重绘：轮廓三项都有，填充只给选中项。
+ *
+ * [data-slot] 是本产品为插槽预留的锚点，settings.general.item 内只有外观行会渲染
+ * aria-pressed，其余各行不使用该属性，因此不会波及其它设置项。 */
+[data-shortcut-modal="settings"] [data-slot="settings.general.item"] button[aria-pressed] {
+  border: 1px solid var(--dsh-m3-outline);
+}
+
+[data-shortcut-modal="settings"] [data-slot="settings.general.item"] button[aria-pressed="true"] {
   background-color: var(--dsh-m3-secondary-container);
 }
 

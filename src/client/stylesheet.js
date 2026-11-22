@@ -91,6 +91,22 @@ tr[data-turn-start="true"]:not(:first-child) > td {
   background-color: var(--dsh-m3-secondary-container);
 }
 
+/* 设置页外观三选一：产品的方块靠 border-l4 画出 0.5dp 轮廓、靠 bg-module-platform
+ * 给选中项上色。border-l4 在本主题中被清零，三个方块于是只剩图标与文字，与页面上
+ * 的普通文本无异——选中项虽有容器色调的填充，轮廓仍不可省，否则无从判断这是三个
+ * 可点的方块。Material 3 的分段按钮用 1dp outline 作容器轮廓、二级容器色作选中段
+ * 的填充，这里照此重绘：轮廓三项都有，填充只给选中项。
+ *
+ * [data-slot] 是本产品为插槽预留的锚点，settings.general.item 内只有外观行会渲染
+ * aria-pressed，其余各行不使用该属性，因此不会波及其它设置项。 */
+[data-shortcut-modal="settings"] [data-slot="settings.general.item"] button[aria-pressed] {
+  border: 1px solid var(--dsh-m3-outline);
+}
+
+[data-shortcut-modal="settings"] [data-slot="settings.general.item"] button[aria-pressed="true"] {
+  background-color: var(--dsh-m3-secondary-container);
+}
+
 /* ---------------------------------------------------------------------------
  * 2. Material 3 不绘制的描边
  * ------------------------------------------------------------------------- */
