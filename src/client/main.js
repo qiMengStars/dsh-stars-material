@@ -1,22 +1,14 @@
 /**
- * 主题包的 Client 半边。
+ * 主题插件的 Client 端入口。
  *
- * applyClient(ctx) 完成以下工作：
+ * `applyClient(ctx)` 负责：
+ *   1. 从 `localStorage` 读取偏好配置（兼容更名前的旧键）。
+ *   2. 解析当前配色：内置预设读取预计算表 `PRESET_TABLE`，跟随系统或自定义颜色向 Host 端请求。
+ *   3. 展开宿主变量与 `--dsh-m3-*` 桥接变量，并通过 `theme.overrideTokens()` / `theme.register()` 安装主题层。
+ *   4. 在 `<head>` 中维护单个 `<style>` 标签，按启用状态写入补充样式规则（`THEME_RULES`）。
+ *   5. 注册「设置 → Material 3」配置页，并监听 `storage` 事件实现多窗口同步。
  *
- *   1. 读取存档中的偏好：是否启用、取色来源、预设。
- *   2. 解析当前来源的配色。手动模式切换构建期生成的预设表；自动模式向 Host 半边
- *      请求操作系统强调色及其推导的配色，浏览器内不运行色彩库。
- *   3. 由配色推导扁平的 `Record<token, { light, dark }>`。该过程为纯函数，不访问
- *      DOM、系统时钟或随机数。
- *   4. 安装主题层：`theme.overrideTokens()` 按令牌逐项换色，`theme.register()`
- *      注册 `stars-material-light` / `stars-material-dark`，并在 `:root` 上写入
- *      `--dsh-m3-*` 桥接属性供样式表按角色取色。
- *   5. 注入一个 `<style>`，承载令牌注册表无法表达的内容：形状刻度、缓动曲线、
- *      原由边框色提供的颜料，以及 Material 3 不绘制的描边。
- *   6. 提供设置页。
- *
- * Client 包不能 `require` Harness 的客户端包，运行时仅 import React。各控件均为
- * 普通元素，样式依赖宿主已发布的 `--dsw-alias-*` 令牌。
+ * 本模块经 `build/bundle-client.mjs` 打包为自包含脚本，运行时仅 `require('react')`，不直接依赖宿主 UI 包。
  */
 
 const NS = 'dsh-stars-material';
@@ -31,20 +23,15 @@ const STORAGE_SOURCE = STORAGE_PREFIX + 'source';
 const STORAGE_PRESET = STORAGE_PREFIX + 'preset';
 const STORAGE_CUSTOM_SEED = STORAGE_PREFIX + 'customSeed';
 
-/**
- * 插件改名为 `dsh-stars-material` 之前写入的键。
- *
- * 这些键只读、不再写入：已存过偏好的 profile 跨过改名后仍保留设置，首次修改时才
- * 将值迁移到新键。缺少该迁移会使改名清除既有设置。
- */
+/** 插件更名前使用的 localStorage 前缀；仅做只读回退，首次保存时写入新前缀以保留历史配置。 */
 const LEGACY_PREFIX = 'dsh.material-3.';
 
-/** `system` follows the OS accent; `preset` pins a built-in seed; `custom` uses the user's own hex seed. */
+/** 配色来源枚举：system 跟随系统强调色，preset 使用内置预设，custom 使用自定义种子色。 */
 const SOURCE_SYSTEM = 'system';
 const SOURCE_PRESET = 'preset';
 const SOURCE_CUSTOM = 'custom';
 
-/** Seed shown before the user picks one in custom mode. */
+/** 自定义颜色模式下的初始种子色。 */
 const DEFAULT_CUSTOM_SEED = '#6750a4';
 
 const HEX_SEED = /^#[0-9a-f]{6}$/iu;
@@ -54,29 +41,29 @@ const SETTINGS_SECTION_ORDER = 26;
 
 const STYLE_TAG_ID = NS + '/stars-material.css';
 
-/** Host 路由：返回系统强调色及由其推导的配色。 */
+/** Host 端配色接口路径。 */
 const HOST_PALETTE_ROUTE = '/stars-material/palette';
 
-/** Host 往返超过该时长仍未答复时停止等待。 */
+/** 单次 Host 配色请求超时时间（毫秒）。 */
 const HOST_TIMEOUT_MS = 1500;
 
-/** 追问强调色的重试时刻表，单位毫秒。 */
+/** 跟随系统模式请求失败后的重试间隔表（毫秒）。 */
 const HOST_RETRY_MS = [0, 2000, 6000, 15000];
 
 const ROLE_INDEX = new Map(ROLES.map((role, index) => [role, index]));
 const PRESET_INDEX = new Map(PRESETS.map((preset) => [preset.id, preset]));
 
-/** 从压缩的配色串里解析一个角色的 `#rrggbb`。 */
+/** 从 270 位压缩配色串中读取指定角色的 #rrggbb 值。 */
 function unpackRole(packed, role) {
   const index = ROLE_INDEX.get(role);
   if (index === undefined) {
-    throw new Error('Material 3 主题：没有叫 "' + role + '" 的角色');
+    throw new Error('dsh-stars-material: 未知角色 "' + role + '"');
   }
   const start = index * 6;
   return '#' + packed.slice(start, start + 6);
 }
 
-/** 从压缩的配色串里解析一个角色的 `#rrggbbaa`。 */
+/** 从压缩配色串中读取指定角色并附加透明度通道，返回 #rrggbbaa。 */
 function unpackRoleAlpha(packed, role, alpha) {
   const byte = Math.round(Math.min(Math.max(alpha, 0), 1) * 255);
   return unpackRole(packed, role) + byte.toString(16).padStart(2, '0');
@@ -92,33 +79,21 @@ function clampSource(source) {
   return SOURCE_PRESET;
 }
 
-/** Accept `#rrggbb` in either case; everything else falls back to the baseline. */
+/** 校验并规范化 #rrggbb 色值；格式无效时回退为默认自定义种子色。 */
 function clampHexSeed(seed) {
   return typeof seed === 'string' && HEX_SEED.test(seed) ? seed.toLowerCase() : DEFAULT_CUSTOM_SEED;
 }
 
-/** 某个预设 id 在构建期算好的配色。 */
 function presetPalette(preset) {
   return PRESET_TABLE[clampPreset(preset)];
 }
 
-/**
- * 表中每个值要么是字面量，要么是两个字面量的 `color-mix()`，派生色由浏览器计算，
- * 发布的脚本无需包含色彩库。
- */
+/** 生成交由浏览器计算的 color-mix() 表达式。 */
 function mixExpression(first, into, weight) {
   return 'color-mix(in srgb, ' + first + ' ' + weight + '%, ' + into + ')';
 }
 
-/**
- * 为一份配色生成完整的令牌表。
- *
- * 结果为纯数据：相同输入始终得到相同的表，偏好每次变化都可重新调用
- * `overrideTokens`。
- *
- * `palette` 是 `{ light, dark }`，各为一条压缩的角色串。预设表与 Host 答复均为
- * 该形状，解析过程不区分配色的来源。
- */
+/** 将 `{ light, dark }` 压缩配色展开为完整的宿主变量映射表（纯函数，不区分配色来源）。 */
 function buildTokenMap(palette) {
   const light = palette.light;
   const dark = palette.dark;
@@ -136,7 +111,7 @@ function buildTokenMap(palette) {
 
   for (const [name, value] of Object.entries(LITERAL_TOKENS)) put(name, value, value);
 
-  // 被清除的描边与阴影都表示不绘制任何内容。
+  // 需清空的边框变量统一设为 transparent。
   for (const name of CLEARED_TOKENS) put(name, 'transparent', 'transparent');
 
   for (const [name, spec] of Object.entries(STATE_LAYER_TOKENS)) {
@@ -185,20 +160,13 @@ function buildTokenMap(palette) {
     );
   }
 
-  // 高程组合值包含一道 0.5dp 描边和两层极淡光晕。Material 3 仅靠色调表达高程，
-  // 因此这七个名称全部解析为 none。
+  // 阴影与高程变量统一置为 none，改由表面背景明暗表达层级。
   for (const name of ELEVATION_TOKENS) put(name, 'none', 'none');
 
   return tokens;
 }
 
-/**
- * 给样式表使用的桥。
- *
- * 样式表无法调用 `unpackRole`，因此每个需要过桥的角色都把解析结果发布为自定义
- * 属性。明暗两套值均通过 `light-dark()` 写入，这是 CSS 中唯一能把两个方案的值
- * 装入单个属性的写法。
- */
+/** 生成供补充样式表使用的 --dsh-m3-* 变量，通过 light-dark() 同时承载浅色与深色取值。 */
 function buildBridgeTokens(palette) {
   const out = {};
   for (const { variable, role } of BRIDGE_ROLES) {
@@ -212,7 +180,7 @@ function buildBridgeTokens(palette) {
   return out;
 }
 
-/** `theme.register()` 可接受的部分：仅含产品令牌，且只含当前方案。 */
+/** 提取供 theme.register() 使用的单模式宿主变量（仅保留 --dsw-* 前缀）。 */
 function productTokens(tokens, colorScheme) {
   const out = {};
   for (const [name, modes] of Object.entries(tokens)) {
@@ -234,13 +202,7 @@ function readStorage(key, fallback) {
   }
 }
 
-/**
- * 读取一项偏好，未命中时回退到改名前的键。
- *
- * @param {string} key 当前的键
- * @param {string} legacy 旧前缀下的同名键
- * @param {string} fallback 两个键均未设置时采用的值
- */
+/** 读取配置项，当前键不存在时回退读取更名前的旧键。 */
 function readPreference(key, legacy, fallback) {
   const current = readStorage(key, null);
   if (current !== null) return current;
@@ -251,7 +213,7 @@ function writeStorage(key, value) {
   try {
     window.localStorage.setItem(key, value);
   } catch {
-    // 存储被禁用时，选择只在内存中保留，刷新后失效。
+    // localStorage 不可用时，更改仅在当前会话内存中生效。
   }
 }
 
@@ -271,12 +233,8 @@ function readPreferences() {
 // ---------------------------------------------------------------------------
 
 /**
- * Ask the Host half for the operating system accent colour.
- *
- * The Host owns this because reading a registry value needs a child process and
- * a colour library, neither of which belongs in a browser bundle. A failure is
- * normal (no accent colour configured, a non-Windows build, a blocked child
- * process) and only downgrades the theme to the preset palette.
+ * 向 Host 端 `/stars-material/palette` 请求配色。
+ * 传入 `seed` 时按指定种子色推导；未传时读取操作系统强调色。
  */
 async function fetchPalette(seed) {
   const controller = new AbortController();
@@ -331,7 +289,7 @@ const SETTINGS_STYLE = `
   gap: 8px;
   display: inline-flex;
   border: 0;
-  /* Material 3 的 chip 是 8dp 圆角矩形，不是胶囊。 */
+  /* Material 3 选项片采用 8px 圆角矩形。 */
   border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
@@ -428,14 +386,8 @@ const SETTINGS_STYLE = `
 `;
 
 /**
- * 插入（或刷新）本包的样式表。
- *
- * 加载器为每个包提供 `styles` builtin 用于此操作。该 builtin 缺失时（旧版本宿主）
- * 回退到 `<head>` 中的一个 `<style>` 元素：不修改 `document.body`，不插入第二个
- * 标签。
- *
- * 设置页规则始终存在；主题规则（形状刻度、缓动曲线、描边清除、桥接变量的使用方）
- * 仅在主题开启时写入，关闭主题可恢复原样。
+ * 在 `<head>` 中维护单个 `<style>` 元素（按 `data-plugin-css` 复用，避免重复插入）。
+ * 设置页样式始终保留，主题补充规则（`THEME_RULES`）仅在主题启用时写入。
  */
 function installStyles() {
   const selector = 'style[data-plugin-css=' + JSON.stringify(STYLE_TAG_ID) + ']';
@@ -501,11 +453,7 @@ function Material3SettingsPage(props) {
     props.onChange(next);
   };
 
-  /**
-   * The picker and the hex field only edit a local draft. Deriving a palette is
-   * a Host round trip, so it must not run once per colour while the picker is
-   * being dragged — only when the user presses Apply.
-   */
+  // 取色器与输入框仅更新本地草稿，点击「应用」后才向 Host 请求配色，避免拖动时频繁请求。
   const candidate = hexDraft.startsWith('#') ? hexDraft : '#' + hexDraft;
   const draftSeed = HEX_SEED.test(candidate) ? candidate.toLowerCase() : null;
   const pickerValue = draftSeed ?? draft.customSeed;
@@ -658,12 +606,7 @@ function Material3SettingsPage(props) {
   );
 }
 
-/**
- * 取色来源标题下方的说明。
- *
- * 自动模式需要区分三种情况：已读取系统颜色；已读取但无法推导配色；系统颜色不可用。
- * 区分后可避免对最终配色来源产生歧义。
- */
+/** 生成「跟随系统」说明文案：已获取系统强调色时附带色值，否则显示不可用提示。 */
 function describeSystem(state, t) {
   if (state.systemSeed === null || state.systemSeed === undefined) return t('page.systemUnavailable');
   return t('page.systemDescription') + ' ' + state.systemSeed;
@@ -673,12 +616,7 @@ function describeSystem(state, t) {
 // 主题层
 // ---------------------------------------------------------------------------
 
-/**
- * 为一份已解析的配色安装全部主题层。
- *
- * 返回的清理函数仅移除它自己安装的层。`register()` 不接受重复 id，因此更换配色
- * 时必须先清理再注册；注册表操作集中在这一层。
- */
+/** 安装当前配色对应的变量覆盖层与明暗主题注册项；切换配色前必须先调用返回的 dispose() 释放旧注册项。 */
 function createThemeLayers(theme, enabled, palette) {
   if (!enabled) {
     return { dispose() {} };
@@ -692,7 +630,7 @@ function createThemeLayers(theme, enabled, palette) {
     disposers.push(theme.overrideTokens(SOURCE, tokens));
   }
 
-  // 桥接属性使用同一套覆盖机制，随令牌层一同移除、重新叠加。
+  // 桥接变量使用独立的覆盖源，随主题层一起卸载与更新。
   if (typeof theme.overrideTokens === 'function') {
     const pairs = {};
     for (const [name, value] of Object.entries(bridge)) {
@@ -712,8 +650,8 @@ function createThemeLayers(theme, enabled, palette) {
           theme.register({ id, colorScheme, tokens: productTokens(tokens, colorScheme) }),
         );
       } catch (error) {
-        // 上次运行遗留的注册不是致命错误：界面配色由覆盖层提供。
-        console.error('Material 3 主题：注册 ' + id + ' 失败', error);
+        // 重复注册或热重载残留不影响主配色（界面由 overrideTokens 生效），记录日志即可。
+        console.error('dsh-stars-material: 注册主题 ' + id + ' 失败', error);
       }
     }
   }
@@ -725,7 +663,7 @@ function createThemeLayers(theme, enabled, palette) {
         try {
           dispose();
         } catch (error) {
-          console.error('Material 3 主题：清理主题层失败', error);
+          console.error('dsh-stars-material: 清理主题层失败', error);
         }
       }
     },
@@ -739,7 +677,7 @@ function createThemeLayers(theme, enabled, palette) {
 function applyClient(ctx) {
   const theme = ctx.get('theme');
   if (theme === undefined) {
-    console.error('Material 3 主题：拿不到 "theme" 服务');
+    console.error('dsh-stars-material: 未获取到 "theme" 服务');
     return;
   }
 
@@ -767,8 +705,7 @@ function applyClient(ctx) {
     revision: 0,
   };
 
-  /** 当前使用的配色。预设模式可直接确定；自动模式先采用基准配色使首帧即应用主题，
-   *  Host 答复到达后再替换。 */
+  // 预设模式直接使用目标预设；跟随系统或自定义模式先以默认预设占位，待 Host 响应后替换。
   let resolved = preference.source === SOURCE_PRESET
     ? presetPalette(preference.preset)
     : presetPalette(DEFAULT_PRESET);
@@ -779,7 +716,7 @@ function applyClient(ctx) {
   }, NS + ' stylesheet');
   styles.apply(preference.enabled);
 
-  /** 当前生效的主题层；每次更换配色时整套替换。 */
+  // 当前生效的主题层句柄，切换配色时整体替换。
   let layers = { dispose() {} };
 
   ctx.effect(() => {
@@ -797,7 +734,6 @@ function applyClient(ctx) {
     published.revision += 1;
   };
 
-  /** 按当前偏好重新安装所有层。 */
   const install = () => {
     layers.dispose();
     layers = createThemeLayers(theme, preference.enabled && resolved !== null, resolved);
@@ -805,14 +741,10 @@ function applyClient(ctx) {
     publish();
   };
 
-  /** 待触发的重试句柄；更换配色时取消。 */
+  // 跟随系统模式的重试定时器句柄，切换配色来源时取消。
   let retryTimer = null;
 
-  /**
-   * Monotonic id for the current resolution. Every async answer checks it:
-   * dragging the colour picker fires many requests, and an older answer must
-   * never overwrite a newer one.
-   */
+  // 递增请求序号：异步响应返回前校验序号，防止较早发出的请求覆盖较新的配色选择。
   let resolutionId = 0;
 
   const cancelRetry = () => {
@@ -822,13 +754,7 @@ function applyClient(ctx) {
     }
   };
 
-  /**
-   * 向 Host 请求强调色配色，失败时按退避节奏重试。
-   *
-   * Host 路由在 Host 半边加载时注册，页面可能先于其就绪：首次启动较慢，或刷新后
-   * 新 Client 遇上旧 Host。单次失败不应使整个会话固定在基准配色上，因此在认定回退
-   * 之前按较短的退避间隔重试若干次。
-   */
+  /** 向 Host 请求系统强调色配色；启动初期 Host 路由可能尚未就绪，失败时按 HOST_RETRY_MS 退避重试，全部失败后回退为默认预设。 */
   const resolveSystem = async (attempt, id) => {
     retryTimer = null;
     try {
@@ -847,30 +773,22 @@ function applyClient(ctx) {
         }, HOST_RETRY_MS[next]);
         return;
       }
-      // 回退后主题仍可用：Material 基准配色本身是有效的 M3 配色，只是未采用
-      // 系统强调色。
-      console.warn('Material 3 主题：取不到系统强调色，改用基准配色', error);
+      console.warn('dsh-stars-material: 无法获取系统强调色，已回退为默认预设', error);
       resolved = presetPalette(DEFAULT_PRESET);
       published.systemSeed = null;
       install();
     }
   };
 
-  /**
-   * Derive the palette for the user's own seed. There is no retry backoff here:
-   * a colour change is one explicit request, and the previous palette stays on
-   * screen if the Host cannot answer.
-   */
+  /** 向 Host 请求自定义种子色配色；不自动重试，失败时保留当前配色并提示错误。 */
   const resolveCustom = async (id) => {
     try {
       const answer = await fetchPalette(preference.customSeed);
       if (id !== resolutionId) return;
-      // An old Host still owns the route from before the custom seed was
-      // added. It answers the system palette and echoes a different seed;
-      // accepting that would look exactly like "the colour did nothing".
+      // 若运行中的 Host 仍是旧版本（忽略 ?seed= 并返回系统强调色），响应色值会与请求不一致，需提示用户重启应用。
       const answered = typeof answer.seed === 'string' ? answer.seed.toLowerCase() : null;
       if (answered !== preference.customSeed) {
-        console.warn('Material 3 theme: Host answered seed ' + answered + ', expected ' + preference.customSeed);
+        console.warn('dsh-stars-material: Host 返回种子色 ' + answered + '，与请求的 ' + preference.customSeed + ' 不一致');
         published.customError = true;
         published.customStale = true;
         install();
@@ -882,16 +800,15 @@ function applyClient(ctx) {
       install();
     } catch (error) {
       if (id !== resolutionId) return;
-      console.warn('Material 3 theme: custom colour could not be derived', error);
+      console.warn('dsh-stars-material: 生成自定义配色失败', error);
       published.customError = true;
       published.customStale = false;
-      // `resolved` is still the last good palette (the Material baseline on a
-      // cold start), so re-install it instead of leaving the UI unthemed.
+      // 保留上一次有效配色（冷启动时为默认预设），并刷新界面以显示错误提示。
       install();
     }
   };
 
-  /** 按 `preference.source` 解析配色并安装。 */
+  /** 根据当前配色来源解析并安装主题层。 */
   const resolve = async () => {
     const id = ++resolutionId;
     cancelRetry();
@@ -926,7 +843,7 @@ function applyClient(ctx) {
       return;
     }
 
-    // 自动模式需要一次 Host 往返；答复到达前保留现有主题层，避免界面出现未着色的帧。
+    // 跟随系统与自定义模式均需请求 Host；响应返回前保留当前主题层，避免界面闪烁。
     published.source = preference.source;
     published.preset = preference.preset;
     published.enabled = preference.enabled;
@@ -969,7 +886,7 @@ function applyClient(ctx) {
 
   ctx.effect(() => () => cancelRetry(), NS + ' palette retry');
 
-  // 自动模式是默认来源，加载时先解析一次。
+  // 初始化时按已保存的配色来源执行一次解析与安装。
   void resolve();
 }
 const DICTS = {
