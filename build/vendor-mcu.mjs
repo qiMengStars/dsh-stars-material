@@ -1,16 +1,12 @@
 /**
- * 重新生成 vendor 目录下的 Material Color Utilities 副本。
+ * 从已安装的 `@material/material-color-utilities` 重建 `vendor/material-color-utilities/` 副本。
  *
- * 上游包为 ESM，相对 import 不带 `.js` 后缀，Node 无法解析。仓库因此在
- * `vendor/material-color-utilities` 保留一份补齐后缀的副本，脚本从已安装的包复现：
- * 先将包安装到任意可写目录，再把包路径作为命令行参数传入。
+ * 上游包在相对 import/export 中省略了 `.js` 后缀，Node ESM 加载会报错；本脚本复制源码并
+ * 自动补齐 `.js` 后缀，同时附带 `LICENSE` 与 `package.json`。生成的副本供
+ * `build/generate-palettes.mjs`（构建期预设）与 `build/bundle-host.mjs`（Host 端运行时依赖）共同使用。
  *
  *   cmd /c "npm install @material/material-color-utilities@0.4.0 --no-audit --no-fund --ignore-scripts --cache %TEMP%\mcu-cache --prefix %TEMP%\mcu"
  *   node build/vendor-mcu.mjs %TEMP%\mcu\node_modules\@material\material-color-utilities
- *
- * 包路径必须显式给出，没有适用于所有机器的默认路径。生成的副本由
- * `build/generate-palettes.mjs` 加载，配色流水线不依赖仓库之外的文件。
- * Material Color Utilities 采用 Apache-2.0 许可证，LICENSE 一并复制。
  */
 
 import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
@@ -23,7 +19,7 @@ const TARGET = resolve(REPO, 'vendor/material-color-utilities');
 const ARGUMENT = process.argv[2];
 
 if (ARGUMENT === undefined) {
-  process.stderr.write('缺少已安装包的路径：node build/vendor-mcu.mjs <package-dir>\n');
+  process.stderr.write('缺少包目录参数：node build/vendor-mcu.mjs <package-dir>\n');
   process.exit(1);
 }
 
@@ -32,8 +28,8 @@ const SOURCE = resolve(REPO, ARGUMENT);
 try {
   await stat(join(SOURCE, 'index.js'));
 } catch {
-  process.stderr.write('该路径下不存在 Material Color Utilities 包：' + SOURCE + '\n');
-  process.stderr.write('请传入包目录：node build/vendor-mcu.mjs <package-dir>\n');
+  process.stderr.write('未找到 Material Color Utilities 包（缺少 index.js）：' + SOURCE + '\n');
+  process.stderr.write('用法：node build/vendor-mcu.mjs <package-dir>\n');
   process.exit(1);
 }
 
@@ -81,5 +77,5 @@ for (const extra of ['LICENSE', 'package.json']) {
   await cp(join(SOURCE, extra), join(TARGET, extra));
 }
 
-process.stdout.write('已复制 ' + fileCount + ' 个文件，改了 ' + patchedCount + ' 个\n');
-process.stdout.write('到 ' + TARGET + '\n');
+process.stdout.write('已复制 ' + fileCount + ' 个 .js 文件（其中补齐后缀 ' + patchedCount + ' 个）\n');
+process.stdout.write('输出目录：' + TARGET + '\n');

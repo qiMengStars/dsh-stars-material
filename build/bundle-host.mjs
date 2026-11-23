@@ -1,19 +1,11 @@
 /**
- * 打包 Host 端的配色库。
+ * 打包 Host 端运行时依赖（`plugin/lib/`）。
+ *
+ * 将 `vendor/material-color-utilities` 复制到 `plugin/lib/mcu/`，并将配色规格与引擎
+ * 合并为 `plugin/lib/palette.js`，使插件安装后无需额外 `node_modules` 即可在运行时
+ * 根据系统强调色或自定义种子色推导配色。
  *
  *   node build/bundle-host.mjs
- *
- * 将 Client 端缺失的 Host 端依赖复制到 `plugin/lib/`：Material Color Utilities 实现
- * （用于从系统强调色推导配色）与配色引擎，使发布包自带依赖、安装时无需
- * `node_modules`。
- *
- * Host 产物保持为普通 Node ESM 模块图：`import` 声明原样保留，各模块作用域独立。
- *
- * 产物：
- *   plugin/lib/mcu/index.js      vendored 库的入口
- *   plugin/lib/mcu/**            库的其余部分，`.js` 后缀保持不变
- *   plugin/lib/palette.js        配色引擎、角色表与 MCU 命名空间合成的单一模块
- *   plugin/lib/mcu/LICENSE       Apache-2.0 许可证，再分发时必须附带
  */
 
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -26,12 +18,7 @@ const VENDOR = resolve(REPO, 'vendor/material-color-utilities');
 const LIB = resolve(REPO, 'plugin/lib');
 const MCU_OUT = resolve(LIB, 'mcu');
 
-/**
- * 复制到发布包中的 vendored 库条目。
- *
- * 整树复制：`index.js` 再导出每个目录，裁剪子集需要改动第三方入口文件；手工维护的
- * 子集会随间接 import 变化而失效。这些代码仅在 Host 端运行，整树约 340 KB。
- */
+/** 随插件包完整复制的 Material Color Utilities 目录条目，避免手工裁剪导致间接引用失效。 */
 const KEEP = [
   'index.js',
   'LICENSE',
@@ -52,8 +39,7 @@ async function main() {
   await rm(MCU_OUT, { recursive: true, force: true });
   await mkdir(MCU_OUT, { recursive: true });
 
-  // 1. 原样复制 vendored 库。该版本已由 build/vendor-mcu.mjs 打过补丁，
-  //    每个相对 import 均带 `.js` 后缀。
+  // 1. 复制已补全 ESM `.js` 后缀的 Material Color Utilities 源码。
   for (const name of KEEP) {
     await cp(resolve(VENDOR, name), resolve(MCU_OUT, name), { recursive: true });
   }
@@ -75,7 +61,7 @@ async function main() {
     'utf8',
   );
 
-  // 2. 生成配色模块：合并角色表、配色引擎，以及引擎依赖的 MCU 命名空间。
+  // 2. 合并配色规格、配色引擎与 MCU 命名空间为单一 ESM 模块。
   const spec = await readFile(resolve(REPO, 'src/parts/palette-spec.js'), 'utf8');
   const engine = await readFile(resolve(REPO, 'src/parts/palette-engine.js'), 'utf8');
 
@@ -85,12 +71,8 @@ async function main() {
       .replace(/^export\s+(?=(?:const|let|var|function|class|async)\b)/gmu, '');
 
   const palette = `/**
- * Host 端的配色引擎 —— 由 build/bundle-host.mjs 生成。
- *
- * 合并角色表、配色引擎，以及引擎依赖的 Material Color Utilities 命名空间，
- * 三者必须彼此一致。重新生成时执行：
- *
- *   node build/bundle-host.mjs
+ * Host 端配色模块 —— 由 build/bundle-host.mjs 自动生成，请勿手动修改。
+ * 合并了 src/parts/palette-spec.js、src/parts/palette-engine.js 与 ./mcu/index.js。
  */
 
 import * as mcu from './mcu/index.js';

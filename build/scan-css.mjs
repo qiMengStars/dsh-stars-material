@@ -1,19 +1,16 @@
 /**
- * 排查工具：列出 app.asar 中命中指定模式的 CSS 规则。
- *
- * 读取已安装 Harness 的 app.asar，解析其目录树并检索 CSS 声明，输出命中的选择器
- * 与声明块。
+ * 排查工具：在本地 `app.asar` 中检索匹配指定声明模式与选择器的 CSS 规则。
  *
  *   node build/scan-css.mjs <body-pattern> [selector-pattern] [limit]
  */
 
 import { readFileSync } from 'node:fs';
 
-// 已安装 Harness 的 app.asar 路径，由环境变量 DSH_ASAR 指定。
+// 需通过环境变量指定本地 DeepSeek Harness 的 app.asar 路径，例如：
 //   $env:DSH_ASAR = '<install>/resources/app.asar'
 const ASAR = process.env.DSH_ASAR;
 if (!ASAR) {
-  throw new Error('运行前请把 DSH_ASAR 设成已安装的 app.asar 路径');
+  throw new Error('请先设置环境变量 DSH_ASAR 为本地 app.asar 路径');
 }
 const buffer = readFileSync(ASAR);
 
@@ -21,7 +18,7 @@ const headerSize = buffer.readUInt32LE(12);
 const tree = JSON.parse(buffer.subarray(16, 16 + headerSize).toString('utf8'));
 const dataOffset = 16 + Math.ceil(headerSize / 4) * 4;
 
-/** 把 app.asar 的目录树展开为 [路径, 条目] 列表。 */
+/** 将 ASAR 目录树展开为 [路径, 条目] 列表。 */
 function walk(node, prefix, out) {
   for (const [name, entry] of Object.entries(node.files ?? {})) {
     const path = `${prefix}/${name}`;
@@ -35,7 +32,7 @@ function walk(node, prefix, out) {
 
 const entries = walk(tree, '', []);
 const cssFiles = entries.filter(([path]) => path.endsWith('.css'));
-process.stdout.write(`css 文件数：${cssFiles.length}\n`);
+process.stdout.write(`CSS 文件数：${cssFiles.length}\n`);
 
 const pattern = new RegExp(process.argv[2] ?? 'border', 'u');
 const selectorFilter = new RegExp(process.argv[3] ?? '.', 'u');
@@ -55,4 +52,4 @@ for (const [path, entry] of cssFiles) {
     if (++shown >= Number(process.argv[4] ?? 20)) process.exit(0);
   }
 }
-process.stdout.write(`\n命中：${shown}\n`);
+process.stdout.write(`\n匹配规则数：${shown}\n`);

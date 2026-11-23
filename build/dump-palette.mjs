@@ -1,9 +1,11 @@
-// 将「角色 → 十六进制」配色表写入临时目录，供截图归属工具读取。
-//
-// 明暗两套方案分别写入 %TEMP%/m3-live-light.txt 与 %TEMP%/m3-live-dark.txt，
-// 文件路径输出到标准输出。种子色取命令行参数，缺省时使用 DEFAULT_PRESET。
-//
-//   node build/dump-palette.mjs '#6750a4'
+/**
+ * 将指定种子色或预设 ID 生成的明暗两套配色表导出为临时文件，供截图分析脚本读取。
+ *
+ *   node build/dump-palette.mjs '#6750a4'
+ *   node build/dump-palette.mjs baseline
+ *
+ * 输出文件位于系统临时目录：`m3-live-light.txt` 与 `m3-live-dark.txt`（每行 `<#rrggbb>  <role>`）。
+ */
 import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -20,7 +22,7 @@ const requested = process.argv[2] ?? spec.DEFAULT_PRESET;
 const known = new Map(spec.PRESETS.map((preset) => [preset.id, preset.hex]));
 const seed = known.get(requested) ?? requested;
 if (!/^#[0-9a-f]{6}$/iu.test(seed)) {
-  process.stderr.write(`既不是预设 id 也不是 #rrggbb 种子色：${requested}\n`);
+  process.stderr.write(`参数须为有效的预设 ID 或 #rrggbb 色值：${requested}\n`);
   process.exit(1);
 }
 
@@ -32,4 +34,4 @@ for (const scheme of ['light', 'dark']) {
   writeFileSync(file, lines.sort().join('\n') + '\n');
   process.stdout.write(`${file}\n`);
 }
-process.stdout.write(`种子色 ${seed}（${requested}）\n`);
+process.stdout.write(`种子色：${seed}（参数：${requested}）\n`);

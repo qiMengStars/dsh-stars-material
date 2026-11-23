@@ -1,24 +1,16 @@
 /**
- * 已发布 Client 包的离线自检。
+ * Client 端打包产物（`plugin/client.js`）的离线行为自检。
  *
- * 在最小桩环境中加载 `plugin/client.js`：模块加载器、三个注入服务（`theme`、
- * `locale`、`slots`）以及 DOM 调用均由替身实现。自检覆盖以下内容：
- *
- *   - 已发布样式表中被赋值的产品令牌均已覆盖；
- *   - 每个值均由 `light`、`dark` 两个非空字符串组成；
- *   - 颜色取值符合 `#rrggbb`、`#rrggbbaa` 或基于字面量的 `color-mix()` 格式；
- *   - Material 3 不绘制的边框令牌解析为 `transparent`，开关轨道与环形仪表的
- *     令牌保留可见前景；
- *   - 高程与阴影令牌均解析为 `none`；
- *   - 状态层令牌定义为叠在配色上的 8%–12% `color-mix()`；
- *   - 采集到的表面阶梯按亮度严格单调；
- *   - `--dsh-m3-*` 桥接属性由 `light-dark()` 同时定义两套配色；
- *   - 两个主题 id 分别按对应的深浅色方案注册；
- *   - 预设、系统、回退、恢复、禁用与旧键场景各自只安装所属层，且均可清理。
+ * 在最小替身环境（模拟模块加载器、DOM、`theme` / `locale` / `slots` 服务与 `fetch`）中执行
+ * `plugin/client.js`，验证：
+ *   - 覆盖全部宿主颜色变量，每项具备合法的浅色与深色取值；
+ *   - 常规边框变量设为 `transparent`，高程与阴影变量设为 `none`，交互状态采用 `color-mix()`；
+ *   - 浅色与深色表面容器阶梯按亮度单调递减/递增；
+ *   - `--dsh-m3-*` 桥接变量以 `light-dark()` 输出，两个主题均正确注册且语言词典键集对齐；
+ *   - 预设、跟随系统、失败回退、重试恢复、禁用、自定义颜色、旧版 Host 识别与旧配置键迁移
+ *     场景的行为与生命周期清理均符合预期。
  *
  *   node build/self-check.mjs
- *
- * 校验数据与接线，不涉及运行中的应用的视觉表现。
  */
 
 import { readFile } from 'node:fs/promises';
@@ -45,11 +37,11 @@ const SHIPPED_CSS = [
   'gradient-shadow-text.css',
 ];
 
-/** 颜色权威样式表，定义与 `build/validate-coverage.mjs` 一致。 */
+/** 颜色权威样式表，与 `build/validate-coverage.mjs` 保持一致。 */
 const COLOUR_SHEET = 'design-platform.css';
 
 // ---------------------------------------------------------------------------
-// 仅替身实现 Client 包实际调用的 DOM 接口。
+// 最小 DOM 替身
 // ---------------------------------------------------------------------------
 
 function createDom() {
@@ -128,18 +120,13 @@ function createSlotsStub() {
 }
 
 // ---------------------------------------------------------------------------
-// Client 包仅加载一次；每个场景使用独立上下文调用 `apply`，以隔离状态。
+// 加载一次 `plugin/client.js`，各场景分别调用 `apply(ctx)` 以隔离状态
 // ---------------------------------------------------------------------------
 
 const source = await readFile(BUNDLE, 'utf8');
 const dom = createDom();
 
-/**
- * 定时器队列。
- *
- * Client 侧按退避时间表重试强调色查询，Host 不可用时会注册待执行定时器。
- * 手动驱动定时器可缩短自检耗时，并固定重试顺序。
- */
+// 接管定时重试队列，以便在单测中同步推进退避重试而不等待真实时间。
 const timers = [];
 let nextTimerId = 1;
 const queueTimer = (callback) => {
@@ -198,13 +185,7 @@ check(Array.isArray(plugin.inject), '插件未声明 inject');
 check(plugin.inject.includes('theme'), '插件未声明 theme 服务');
 check(typeof plugin.apply === 'function', '插件未提供 apply()');
 
-/**
- * 执行一个自检场景。
- *
- * @param {object} options
- * @param {Record<string,string>} options.storage   localStorage 初始内容
- * @param {Function|null} options.fetch             `window.fetch` 的替身
- */
+/** 运行单个离线测试场景，返回记录的调用与状态控制句柄。 */
 async function scenario({ storage, fetch }) {
   const store = new Map(Object.entries(storage ?? {}));
   sandbox.window.localStorage = {
@@ -213,7 +194,6 @@ async function scenario({ storage, fetch }) {
   };
   sandbox.window.fetch = fetch ?? (() => Promise.reject(new Error('no fetch')));
 
-  /** Client 向 Host 请求强调色配色的次数。 */
   let attempts = 0;
   const hostFetch = sandbox.window.fetch;
   sandbox.window.fetch = (...args) => {
@@ -251,14 +231,9 @@ async function scenario({ storage, fetch }) {
   };
 
   plugin.apply(ctx);
-  // 系统模式跨一个 await 产出结果；额外等待一个微任务使两种模式在断言前状态一致。
+  // 等待微任务与退避定时器全部收敛后再做断言。
   await new Promise((tick) => setImmediate(tick));
 
-  /**
-   * 驱动重试定时器直至退避队列清空。
-   *
-   * 断言在退避结束后读取覆盖层，避免读到上一次配色残留的中间状态。
-   */
   const settle = async () => {
     for (let round = 0; round < 8; round += 1) {
       await new Promise((tick) => setImmediate(tick));
@@ -291,12 +266,7 @@ async function scenario({ storage, fetch }) {
 // 预期的令牌集合
 // ---------------------------------------------------------------------------
 
-/**
- * 颜色权威中声明的名字，排除 `--dsw-static-*` 原始色阶。
- *
- * 颜色契约仅由 `design-platform.css` 定义，因此只有该表的颜色令牌必须参与覆盖。
- * 字体、圆角与缓动变量由其他样式表定义，不属于本主题的覆盖范围。
- */
+/** `design-platform.css` 中声明的宿主颜色变量（排除 `--dsw-static-*` 静态色阶）。 */
 const declared = new Set();
 {
   const css = await readFile(resolve(SURVEY, COLOUR_SHEET), 'utf8');
@@ -307,7 +277,7 @@ const expected = [...declared]
   .filter((name) => name.startsWith('--dsw-alias-') || name.startsWith('--dsw-specific-'))
   .sort();
 
-/** 全部内置样式表中声明的名字，并纳入经回退读取的令牌。 */
+/** 全部参考样式表中声明的变量名并集（含仅通过回退值引用的变量）。 */
 const everywhere = new Set(['--dsw-alias-border-selected']);
 for (const name of SHIPPED_CSS) {
   const css = await readFile(resolve(SURVEY, name), 'utf8');
@@ -382,8 +352,7 @@ check(
   `处理了 ${literal + derived + cleared} 个值，对应 ${productNames.length} 个令牌；每个令牌应当两个`,
 );
 
-// Material 3 不绘制的描边令牌均解析为 transparent，包括 `l3`。
-// 原先以 `l3` 作为填充色的规则改为从桥接变量重绘；SVG 仪表轨道保留前景弧线与标签。
+// 常规边框与轮廓变量（含 `border-l3`）统一设为 transparent；原本借用 `border-l3` 绘制的开关轨道由 stylesheet.js 重绘。
 for (const name of [
   '--dsw-alias-border-l1',
   '--dsw-alias-border-l2',
@@ -425,7 +394,7 @@ check(
   '--dsw-alias-interactive-bg-hover 应混入 transparent，以适配任意表面色',
 );
 
-// 插画类令牌不随深浅色方案变化，表面色令牌必须变化。
+// 固定字面量与清空变量不随深浅色变化，表面底色必须区分深浅色。
 for (const name of ['--dsw-alias-bg-mask-photo', '--dsw-alias-border-inverted']) {
   check(tokens[name]?.light === tokens[name]?.dark, `${name} 不能随深浅色变化`);
 }
@@ -543,7 +512,7 @@ check(
   system.theme.calls.registered.length === 2,
   `系统模式注册了 ${system.theme.calls.registered.length} 个主题`,
 );
-// 'a' 不是颜色字面量；各角色仍须输出格式正确的颜色值。
+// 桩数据用重复字符模拟 270 位配色串，展开后应输出合法的 #rrggbb。
 const systemTokens = system.theme.calls.overrides[0]?.tokens ?? {};
 check(
   systemTokens['--dsw-alias-bg-base']?.light === '#aaaaaa',
@@ -594,7 +563,7 @@ const recovered = await scenario({
   })(),
 });
 check(recovered.attempts() >= 2, `Host 仅收到 ${recovered.attempts()} 次请求`);
-// 最后一次安装产生两层覆盖：先是令牌，再是桥接属性。
+// 每次安装产生两套覆盖层：先是宿主变量，后是桥接变量。
 check(
   recovered.theme.calls.overrides.at(-2)?.tokens?.['--dsw-alias-bg-base']?.light === '#aaaaaa',
   '重试成功后未替换回退配色',
@@ -624,7 +593,7 @@ off.disposeAll();
 check(dom.tags.length === 0, '禁用状态的样式表未随插件一同移除');
 
 // ---------------------------------------------------------------------------
-// 场景 5：profile 中保留改名前的键
+// 场景 5：自定义颜色模式（正常推导、修改色值、非法输入、请求失败与旧版 Host 检测）
 // ---------------------------------------------------------------------------
 
 let askedSeed = null;
@@ -645,44 +614,43 @@ const custom = await scenario({
   },
 });
 
-check(askedSeed?.includes('seed=%23ff0000'), `custom mode asked for the wrong URL: "${askedSeed}"`);
-check(custom.attempts() === 1, `a custom seed must need one request, got ${custom.attempts()}`);
+check(askedSeed?.includes('seed=%23ff0000'), `自定义模式请求的 URL 不正确："${askedSeed}"`);
+check(custom.attempts() === 1, `自定义种子色应只请求 1 次，实际 ${custom.attempts()} 次`);
 check(
   custom.theme.calls.overrides.at(-2)?.tokens?.['--dsw-alias-bg-base']?.light === '#cccccc',
-  'custom mode did not install the Host palette derived from the user seed',
+  '自定义模式未安装 Host 返回的配色',
 );
 const customState = custom.slots.__registrations[0]?.options?.inject?.()?.state;
-check(customState?.customSeed === '#ff0000', `the settings page lost the custom seed: "${customState?.customSeed}"`);
-check(customState?.customError === false, 'a successful custom palette must not report an error');
+check(customState?.customSeed === '#ff0000', `设置页未保留自定义种子色："${customState?.customSeed}"`);
+check(customState?.customError === false, '自定义配色成功时不应报告错误');
 
-/** Change the seed through the settings callback, as the colour picker does. */
+// 通过设置页回调更新种子色，验证小写规范化、持久化及主题层更新。
 const onChange = custom.slots.__registrations[0]?.options?.inject?.()?.onChange;
 onChange({ enabled: true, source: 'custom', preset: 'baseline', customSeed: '#00FF00' });
 await new Promise((tick) => setImmediate(tick));
-check(custom.store.get('dsh.stars-material.customSeed') === '#00ff00', 'the custom seed was not persisted');
+check(custom.store.get('dsh.stars-material.customSeed') === '#00ff00', '自定义种子色未持久化保存');
 check(
   custom.theme.calls.overrides.at(-2)?.tokens?.['--dsw-alias-bg-base']?.light === '#cccccc',
-  'a new seed did not replace the installed custom palette',
+  '更换自定义种子色后未更新已安装的主题层',
 );
-// Malformed input must never reach the Host or corrupt the stored preference.
+// 非法色值应在持久化前被夹紧回默认种子色，不向存储写入无效值。
 onChange({ enabled: true, source: 'custom', preset: 'baseline', customSeed: 'not-a-colour' });
 await new Promise((tick) => setImmediate(tick));
-check(custom.store.get('dsh.stars-material.customSeed') === '#6750a4', 'a malformed seed was persisted');
+check(custom.store.get('dsh.stars-material.customSeed') === '#6750a4', '非法种子色不应原样写入存储');
 custom.disposeAll();
-check(dom.tags.length === 0, 'the custom-mode stylesheet outlived the plugin');
+check(dom.tags.length === 0, '自定义模式的样式表未随插件一同移除');
 
 const customFail = await scenario({
   storage: { 'dsh.stars-material.source': 'custom', 'dsh.stars-material.customSeed': '#123456' },
   fetch: () => Promise.reject(new Error('ECONNREFUSED')),
 });
 const failedState = customFail.slots.__registrations[0]?.options?.inject?.()?.state;
-check(customFail.attempts() === 1, `a failed custom palette must not retry, got ${customFail.attempts()}`);
-check(failedState?.customError === true, 'a failed custom palette must tell the user');
-check(customFail.theme.calls.overrides.length === 2, 'a failed custom palette must keep the previous layers');
+check(customFail.attempts() === 1, `自定义配色失败后不应退避重试，实际请求了 ${customFail.attempts()} 次`);
+check(failedState?.customError === true, '自定义配色失败后应向用户展示错误提示');
+check(customFail.theme.calls.overrides.length === 2, '自定义配色失败后应保留先前已安装的主题层');
 customFail.disposeAll();
 
-// An old Host still answering the system palette must be reported, not silently
-// applied: otherwise the user sees "nothing changed" with no explanation.
+// 旧版 Host 会忽略 ?seed= 并返回系统强调色，需识别并报错，避免静默误导用户。
 const staleHost = await scenario({
   storage: { 'dsh.stars-material.source': 'custom', 'dsh.stars-material.customSeed': '#abcdef' },
   fetch: () => Promise.resolve({
@@ -696,16 +664,16 @@ const staleHost = await scenario({
   }),
 });
 const staleState = staleHost.slots.__registrations[0]?.options?.inject?.()?.state;
-check(staleState?.customStale === true, 'a Host that echoes the wrong seed must be flagged as stale');
-check(staleState?.customError === true, 'a stale Host must surface an error');
+check(staleState?.customStale === true, 'Host 返回与请求不一致的种子色时应标记为版本过旧');
+check(staleState?.customError === true, '检测到旧版 Host 时应显示错误提示');
 check(
   staleHost.theme.calls.overrides.at(-2)?.tokens?.['--dsw-alias-bg-base']?.light !== '#aaaaaa',
-  'a stale Host palette must not be applied to the theme',
+  '检测到旧版 Host 时不得应用其返回的配色',
 );
 staleHost.disposeAll();
 
 // ---------------------------------------------------------------------------
-// Scenario 7: a profile that still holds pre-rename keys
+// 场景 6：兼容更名前的旧配置键
 // ---------------------------------------------------------------------------
 
 // 插件原名 dsh-material-3，对应键为 dsh.material-3.*。改名不得静默重置偏好，

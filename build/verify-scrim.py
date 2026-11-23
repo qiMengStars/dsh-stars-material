@@ -1,10 +1,10 @@
-"""校验 DSH 截图中的压暗背景是否为 Material 3 scrim。
+"""检验应用截图中弹窗遮罩压暗背景是否符合 Material 3 scrim 混合结果。
 
-插件将 --dsw-alias-bg-mask-1 映射为 alpha 0.32 的 scrim。主题生效时，每处压暗表面
-均等于 scrim 与某个 Material 3 表面色按该 alpha 混色的结果。本脚本读取配色表，
-按同一 alpha 逐角色合成混色值，并统计各混色值在截图中的像素数。
+本主题将 `--dsw-alias-bg-mask-1` 映射为不透明度 0.32 的黑色 scrim（`#000000`）。
+本脚本读取配色表，按 `round((1 - ALPHA) * channel)` 计算每个角色被遮罩压暗后的颜色，
+并在截图中统计像素数不少于 1000 的匹配区域。
 
-参数依次为截图路径、build/print-palette.mjs 输出的配色表路径。
+用法：python build/verify-scrim.py <screenshot-path> <palette-table-path>
 """
 
 from __future__ import annotations
@@ -39,11 +39,11 @@ def main() -> int:
     counts = Counter(image.get_flattened_data())
     total = image.size[0] * image.size[1]
 
-    print(f"图片 {image.size[0]}x{image.size[1]}（{total} px）")
-    print(f"按 {ALPHA} 的 scrim 不透明度检验\n")
+    print(f"图片尺寸：{image.size[0]}x{image.size[1]}（共 {total} px）")
+    print(f"按 scrim 不透明度 {ALPHA} 校验\n")
 
     matches = 0
-    print("-- 压暗表面（scrim 与 Material 3 角色混色）--")
+    print("-- 匹配的压暗背景（黑色 scrim 与角色色混合）--")
     for role, rgb in roles:
         blended = tuple(round((1 - ALPHA) * channel) for channel in rgb)
         n = counts.get(blended, 0)
@@ -52,10 +52,10 @@ def main() -> int:
         matches += n
         print(
             f"  {hexs(blended)}  {n:>8} px  {100.0 * n / total:5.2f}%"
-            f"  = scrim 与 {role} {hexs(rgb)} 混色"
+            f"  = scrim 叠加 {role}（{hexs(rgb)}）"
         )
 
-    print(f"\n被压暗的 Material 3 像素：{matches}（{100.0 * matches / total:.2f}%）")
+    print(f"\n匹配的压暗像素总计：{matches}（{100.0 * matches / total:.2f}%）")
     return 0
 
 

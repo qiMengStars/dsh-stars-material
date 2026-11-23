@@ -1,13 +1,9 @@
 /**
- * 打包发布用的 Client 端脚本。
+ * 打包发布用的 Client 端浏览器脚本（`plugin/client.js`）。
  *
- * Harness 通过 `window.__ModuleLoader__.load({ id, factory })` 加载浏览器产物。
- * factory 收到的 `require` 只能解析宿主暴露的模块（`react`），不解析相对路径，
- * 产物也不走 ESM 加载流程，`plugin/client.js` 必须是一个自包含脚本。
- *
- * 按 MODULES 的顺序拼接 `src/` 下的 ESM 源码：移除 import 声明和 export
- * 关键字，其余内容原样保留。`src/client/main.js` 排在最后，提供 applyClient(ctx)，
- * 由文件末尾的包装交给加载器。
+ * 宿主通过 `window.__ModuleLoader__.load({ id, factory })` 加载浏览器插件，
+ * `factory` 内的 `require` 仅提供 `react` 且不执行 ESM 模块解析。因此本脚本按依赖顺序
+ * 拼接 `MODULES`，剥离顶层 `import`/`export` 语句，生成单一自包含文件。
  *
  *   node build/bundle-client.mjs
  */
@@ -21,7 +17,7 @@ const REPO = resolve(HERE, '..');
 const OUT_DIR = resolve(REPO, 'plugin');
 const OUT_FILE = resolve(OUT_DIR, 'client.js');
 
-/** 拼接顺序即模块依赖顺序，被依赖的模块排在前。 */
+/** 按依赖顺序排列的源码模块，被依赖项排在前面。 */
 const MODULES = [
   'src/generated/palettes.js',
   'src/parts/palette-spec.js',
@@ -46,13 +42,13 @@ function stripModule(source, path) {
       if (line.includes(';')) skippingImport = false;
       continue;
     }
-    // 本仓库只用单行 import；出现跨行写法时报错，避免未剥离的 import 进入产物。
+    // 仅处理单行 import 声明，遇到多行写法直接报错以免残留在产物中。
     if (IMPORT_LINE.test(line)) {
       if (!line.includes(';')) skippingImport = true;
       continue;
     }
     if (line.includes('import ') && /^\s*import\b/u.test(line)) {
-      throw new Error(`${path}：本打包脚本不支持跨行 import`);
+      throw new Error(`${path}：打包脚本暂不支持多行 import 语法`);
     }
     if (EXPORT_LIST.test(line)) continue;
     out.push(line.replace(EXPORT_DECL, ''));
@@ -60,7 +56,7 @@ function stripModule(source, path) {
 
   const body = out.join('\n');
   if (/^\s*(?:import|export)\b/mu.test(body)) {
-    throw new Error(`${path}：剥完之后还剩 import/export`);
+    throw new Error(`${path}：剥离后仍残留 import/export 语句`);
   }
   return body.trim();
 }
@@ -72,7 +68,7 @@ for (const modulePath of MODULES) {
   parts.push(`/* ---- ${relative(REPO, absolute).replaceAll('\\', '/')} ---- */\n${stripModule(source, modulePath)}`);
 }
 
-const wrapper = `/* 由 build/bundle-client.mjs 生成，不要手改。 */
+const wrapper = `/* 由 build/bundle-client.mjs 自动生成，请勿手动修改。 */
 window.__ModuleLoader__.load({
   id: ${JSON.stringify(PACKAGE_ID)},
   factory: (require) => {
@@ -94,17 +90,17 @@ ${parts.join('\n\n')}
 await mkdir(OUT_DIR, { recursive: true });
 await writeFile(OUT_FILE, wrapper, 'utf8');
 
-// 生成后先做语法校验，确保产物能被浏览器解析。
+// 通过 Function 构造器校验生成产物的 JS 语法合法性。
 try {
   // eslint-disable-next-line no-new-func
   new Function(wrapper);
 } catch (error) {
-  throw new Error(`生成的 client.js 解析失败：${error.message}`);
+  throw new Error(`生成的 client.js 存在语法错误：${error.message}`);
 }
 
 for (const required of ['window.__ModuleLoader__.load', 'applyClient', 'buildTokenMap']) {
   if (!wrapper.includes(required)) {
-    throw new Error(`生成的 client.js 里没有 "${required}"`);
+    throw new Error(`生成的 client.js 缺少必要标识 "${required}"`);
   }
 }
 

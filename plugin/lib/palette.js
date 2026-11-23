@@ -1,10 +1,6 @@
 /**
- * Host 端的配色引擎 —— 由 build/bundle-host.mjs 生成。
- *
- * 合并角色表、配色引擎，以及引擎依赖的 Material Color Utilities 命名空间，
- * 三者必须彼此一致。重新生成时执行：
- *
- *   node build/bundle-host.mjs
+ * Host 端配色模块 —— 由 build/bundle-host.mjs 自动生成，请勿手动修改。
+ * 合并了 src/parts/palette-spec.js、src/parts/palette-engine.js 与 ./mcu/index.js。
  */
 
 import * as mcu from './mcu/index.js';

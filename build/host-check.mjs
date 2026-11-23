@@ -1,9 +1,13 @@
 /**
- * Host 半边的离线检查。
+ * Host 端入口（`plugin/index.js`）的离线校验。
  *
- * 验证每条失败路径均以形状完整的 `{ ok: false, reason }` 结束，不抛错，并校验路由
- * 返回的 HTTP 状态码。Windows 是否返回强调色只能在真实桌面环境中验证，不在本检查
- * 范围内。
+ * 验证内容：
+ *   - `inject` 依赖声明、路由注册与 `ctx.effect` 清理；
+ *   - 端口绑定前后的同源校验与防 DNS rebinding 检查；
+ *   - 结构化返回格式（配色结果或 `{ ok: false, reason }`，不向外抛错）；
+ *   - 系统强调色缓存及 `?seed=#rrggbb` 自定义种子色路由与参数校验。
+ *
+ * 能否实际读到 Windows 系统强调色仅能在真实桌面环境中验证，不在此检查范围内。
  */
 
 import { strict as assert } from 'node:assert';
@@ -87,12 +91,12 @@ if (payload.ok) {
   assert.ok(payload.reason.length > 0, '失败时必须给出原因');
 }
 
-// 缓存窗口内的第二次请求不得重复读取；响应体逐字节相同即为证据。
+// 缓存窗口内的第二次请求不得重复读取，响应体应逐字节一致。
 const again = exchange({ host: '127.0.0.1:12345', origin: 'http://127.0.0.1:12345' });
 await registered.handler(again.request, again.response);
-assert.equal(again.state.body, sameOrigin.state.body, 'the answer must be cached');
+assert.equal(again.state.body, sameOrigin.state.body, '缓存期内应返回相同的响应体');
 
-// Custom seeds go through the same route but bypass the system-colour cache.
+// 自定义种子色共用同一路由，但不受系统强调色缓存影响。
 async function seeded(url) {
   const sample = exchange({ host: '127.0.0.1:12345', origin: 'http://127.0.0.1:12345' }, url);
   await registered.handler(sample.request, sample.response);
@@ -100,7 +104,7 @@ async function seeded(url) {
 }
 
 const red = await seeded('/stars-material/palette?seed=%23ff0000');
-assert.equal(red.statusCode, 200, 'a valid custom seed must be served');
+assert.equal(red.statusCode, 200, '合法的自定义种子色应返回 200');
 const redPayload = JSON.parse(red.body);
 assert.equal(redPayload.ok, true);
 assert.equal(redPayload.seed, '#ff0000');
@@ -111,10 +115,10 @@ const blue = await seeded('/stars-material/palette?seed=%230000ff');
 const bluePayload = JSON.parse(blue.body);
 assert.equal(bluePayload.ok, true);
 assert.equal(bluePayload.seed, '#0000ff');
-assert.notEqual(bluePayload.light, redPayload.light, 'the system-colour cache must not leak into custom seeds');
+assert.notEqual(bluePayload.light, redPayload.light, '系统配色缓存不得污染自定义种子色结果');
 
 const badSeed = await seeded('/stars-material/palette?seed=red');
-assert.equal(badSeed.statusCode, 400, 'an invalid seed must be rejected');
+assert.equal(badSeed.statusCode, 400, '格式非法的种子色必须返回 400');
 assert.equal(JSON.parse(badSeed.body).ok, false);
 
 const crossSeed = exchange(
@@ -122,7 +126,7 @@ const crossSeed = exchange(
   '/stars-material/palette?seed=%23ff0000',
 );
 await registered.handler(crossSeed.request, crossSeed.response);
-assert.equal(crossSeed.state.statusCode, 403, 'the custom seed route must keep the origin guard');
+assert.equal(crossSeed.state.statusCode, 403, '自定义种子色路由必须保留同源校验');
 
 for (const dispose of effects) dispose();
 assert.equal(disposed, 1, '移除 effect 时必须一并移除路由');

@@ -1,14 +1,11 @@
 /**
- * 校验插件是否覆盖产品读取的全部 token，且未声明实际不存在的 token。
+ * 校验宿主 CSS 变量映射的完整性。
  *
  *   node build/validate-coverage.mjs
  *
- * 比对两个集合。产品 token 指在 `design-platform.css` 中被赋值的名字，遗漏会使对应
- * 界面区域无法应用主题配色。声明名指任意 vendored 样式表中被赋值的每个 `--dsw-*`，
- * 声明不存在的名字意味着笔误或尚未同步的改名。
- *
- * 任一集合不匹配即以非零码退出：新版 DSH 中的改名会在校验阶段失败，而不会变成界面上
- * 一个永不变化的颜色。
+ * 比对 `src/parts/token-map.js` 与 `vendor/dsh-survey/`：
+ *   - 漏掉 `design-platform.css` 中声明的变量会报错（missing）。
+ *   - 声明了四份参考样式表之外的变量会报错（invented）。
  */
 
 import { readFile } from 'node:fs/promises';
@@ -31,10 +28,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
 const SURVEY = resolve(REPO, 'vendor/dsh-survey');
 
-/** 颜色权威样式表：仅该表的完整名字集合必须被覆盖。 */
+/** 宿主颜色变量权威样式表，其中声明的变量必须全覆盖。 */
 const COLOUR_SHEET = resolve(SURVEY, 'design-platform.css');
 
-/** 全部样式表，用于判断被声明的名字是否存在。 */
+/** 全部参考样式表，用于校验映射表中声明的变量名称是否真实存在。 */
 const ALL_SHEETS = [
   'design-platform.css',
   'base.css',
@@ -42,10 +39,10 @@ const ALL_SHEETS = [
   'gradient-shadow-text.css',
 ].map((name) => resolve(SURVEY, name));
 
-/** 产品会读取、但任何 vendored 样式表均未给其赋值的名字（依靠 fallback 生效）。 */
+/** 宿主仅通过回退值引用、未在参考样式表中直接赋值的变量。 */
 const REFERENCED_ONLY = new Set(['--dsw-alias-border-selected']);
 
-/** 给定来源中被赋值的名字，排除 `--dsw-static-*` 原始色阶。 */
+/** 提取样式表中定义的变量名，排除 `--dsw-static-*` 静态基础色阶。 */
 function declaredNames(sources) {
   const names = new Set();
   for (const source of sources) {

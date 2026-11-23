@@ -1,4 +1,4 @@
-/* 由 build/bundle-client.mjs 生成，不要手改。 */
+/* 由 build/bundle-client.mjs 自动生成，请勿手动修改。 */
 window.__ModuleLoader__.load({
   id: "dsh-stars-material",
   factory: (require) => {
@@ -9,19 +9,13 @@ window.__ModuleLoader__.load({
 
 /* ---- src/generated/palettes.js ---- */
 /**
- * 由 build/generate-palettes.mjs 生成，请勿手动修改。
+ * 由 build/generate-palettes.mjs 自动生成，请勿手动修改。
  *
- * 每套配色编码为一条十六进制字符串，包含 45 个角色 × 6 位，按 ROLES 顺序排列，
- * 并去掉每个颜色值开头的 "#"。取值时按角色截取对应片段，因此 Client 端无需携带色彩库。
- * 重新生成时执行：
+ * 单套配色编码为 270 位小写十六进制字符串（45 个角色 × 6 位，不含 "#"），
+ * 顺序与 ROLES 一致，运行时按索引切片读取。
  *
- *   node build/generate-palettes.mjs
- *
- * `PRESET_TABLE` 按预设 id 索引，包含明暗两套配色。预设清单（id、种子色、显示名）
- * 定义在 `src/parts/palette-spec.js`，设置页与本产物共用该定义，避免预设集合不一致。
- *
- * 共包含 8 个 Material 3 预设 × 2 套方案 = 16 套配色，每套 45 个角色，
- * 全部由单一 "tonalSpot"（SchemeTonalSpot）调和方式推导。
+ * `PRESET_TABLE` 按 `src/parts/palette-spec.js` 中的预设 ID 索引，包含浅色与深色两套配色，
+ * 共 8 套预设 × 2 套方案 = 16 组（每组 45 个角色，算法：tonalSpot / SchemeTonalSpot）。
  */
 
 const ROLES = ["primary","onPrimary","primaryContainer","onPrimaryContainer","secondary","onSecondary","secondaryContainer","onSecondaryContainer","tertiary","onTertiary","tertiaryContainer","onTertiaryContainer","error","onError","errorContainer","onErrorContainer","background","onBackground","surface","onSurface","surfaceVariant","onSurfaceVariant","outline","outlineVariant","shadow","scrim","inverseSurface","inverseOnSurface","inversePrimary","surfaceDim","surfaceBright","surfaceContainerLowest","surfaceContainerLow","surfaceContainer","surfaceContainerHigh","surfaceContainerHighest","surfaceTint","success","onSuccess","successContainer","onSuccessContainer","warning","onWarning","warningContainer","onWarningContainer"];
