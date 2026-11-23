@@ -1,44 +1,38 @@
 /**
  * 构建脚本与 Host 端共用的配色引擎。
  *
- * 所有入口均由 `createPaletteEngine(mcu)` 生成。该函数接收 Material Color Utilities
- * 的模块对象作为参数，本身不 import 该库，同一实现可供两个加载器使用：
+ * 通过 `createPaletteEngine(mcu)` 注入 `@material/material-color-utilities` 命名空间，
+ * 使同一套实现可同时服务于构建期与运行时：
+ *   - `build/generate-palettes.mjs` 直接传入 `vendor/material-color-utilities`
+ *   - `build/bundle-host.mjs` 将本文件与 `src/parts/palette-spec.js` 合并生成 `plugin/lib/palette.js`
  *
- *   - `build/generate-palettes.mjs` 直接传入 vendored 目录。
- *   - `plugin/lib/palette.js` 由此文件与 `src/parts/palette-spec.js` 拼接而成，随包携带
- *     `plugin/lib/mcu/` 中的依赖。
- *
- * 文件中唯一的 import 是角色表，打包拼接时会移除该声明（见 `build/bundle-client.mjs`
- * 与 `build/bundle-host.mjs`）。
- *
- * 每套配色压缩为一个十六进制字符串：45 个角色 × 6 位，按 `ROLE_ORDER` 排列，去掉
- * 前缀 `#`。按字符串切片比按对象携带每套配色开销更低，生成的文件也仍可阅读。
+ * 单套配色编码为 270 位小写十六进制字符串（45 个角色 × 6 位，不含 `#`），角色顺序依次为
+ * `ROLE_ORDER`、`surfaceTint` 与 `FIXED_ROLE_ORDER`。
  */
 
 import { FIXED_ROLE_ORDER, ROLE_ORDER } from './palette-spec.js';
 
-/** 角色名到其在压缩串中槽位的映射。 */
+/** 角色名到压缩串槽位索引（0–44）的映射。 */
 const ROLE_INDEX = new Map(
   [...ROLE_ORDER, 'surfaceTint', ...FIXED_ROLE_ORDER].map((role, index) => [role, index]),
 );
 
-/** 固定色相使成功色与警告色不随种子色漂移。 */
+/** 固定色相与彩度，确保成功色与警告色不随种子色偏移。 */
 const FIXED_PALETTES = {
   success: { hue: 145, chroma: 48 },
   warning: { hue: 75, chroma: 60 },
 };
 
-/** 明度取值沿用 M3 主角色的搭配。 */
+/** 固定语义色的明度（tone）配置，沿用 Material 3 标准角色的明暗规律。 */
 const FIXED_TONES = {
   light: { base: 40, onBase: 100, container: 90, onContainer: 10 },
   dark: { base: 80, onBase: 20, container: 30, onContainer: 90 },
 };
 
 /**
- * 在一个 Material Color Utilities 模块对象上建立引擎。
+ * 基于传入的 Material Color Utilities 模块创建配色引擎。
  *
- * @param mcu vendored 的 `@material/material-color-utilities` 命名空间。
- * @returns 两半共用的配色操作。
+ * @param mcu `@material/material-color-utilities` 命名空间对象。
  */
 export function createPaletteEngine(mcu) {
   const {
@@ -75,7 +69,7 @@ export function createPaletteEngine(mcu) {
     for (const role of ROLE_ORDER) {
       const argb = scheme[role];
       if (typeof argb !== 'number') {
-        throw new Error('配色引擎：方案里缺少角色 "' + role + '"');
+        throw new Error('palette-engine: 方案缺少角色 "' + role + '"');
       }
       values.push(hexFromArgb(argb));
     }
@@ -83,22 +77,18 @@ export function createPaletteEngine(mcu) {
     return values;
   }
 
-  /** 压缩一套方案的全部角色。 */
+  /** 将单个方案的 45 个角色打包为 270 位十六进制字符串。 */
   function packScheme(scheme, isDark) {
     const values = [...schemeRoleValues(scheme), ...fixedRoleValues(isDark)];
     for (const value of values) {
       if (!/^#[0-9a-f]{6}$/u.test(value)) {
-        throw new Error('配色引擎：角色取值格式不正确 "' + value + '"');
+        throw new Error('palette-engine: 角色颜色格式无效 "' + value + '"');
       }
     }
     return values.map((hex) => hex.slice(1)).join('');
   }
 
-  /**
-   * 用插件采用的调和方式，从种子色推导明暗两套方案。
-   *
-   * tonal spot 是 Material 3 的默认方案，从任一预设得到的角色表与设计系统文档一致。
-   */
+  /** 使用 Tonal Spot 算法由种子色同步生成浅色与深色两套压缩配色。 */
   function paletteFromSeed(seedHex) {
     const source = Hct.fromInt(argbFromHex(seedHex));
     return {
@@ -107,28 +97,28 @@ export function createPaletteEngine(mcu) {
     };
   }
 
-  /** 从压缩串里取一个角色的 `#rrggbb`。 */
+  /** 从压缩配色串中读取指定角色的 #rrggbb 值。 */
   function unpack(packed, role) {
     const index = ROLE_INDEX.get(role);
     if (index === undefined) {
-      throw new Error('配色引擎：没有叫 "' + role + '" 的角色');
+      throw new Error('palette-engine: 未知角色 "' + role + '"');
     }
     const start = index * 6;
     return '#' + packed.slice(start, start + 6);
   }
 
-  /** 一个角色加一个 alpha 字节的 `#rrggbbaa`。 */
+  /** 读取指定角色并附加透明度通道，返回 #rrggbbaa。 */
   function unpackAlpha(packed, role, alpha) {
     const byte = Math.round(Math.min(Math.max(alpha, 0), 1) * 255);
     return unpack(packed, role) + byte.toString(16).padStart(2, '0');
   }
 
-  /** 颜色的彩度，用于判断系统强调色是否接近中性。 */
+  /** 计算颜色在 HCT 空间中的彩度，用于过滤接近中性灰的系统强调色。 */
   function chromaOf(seedHex) {
     return Hct.fromInt(argbFromHex(seedHex)).chroma;
   }
 
-  /** WCAG 对比度，供构建期断言使用。 */
+  /** 计算两色之间的 WCAG 对比度，供构建期校验使用。 */
   function contrastRatio(firstHex, secondHex) {
     const luminance = (hex) => {
       const channel = (offset) => {

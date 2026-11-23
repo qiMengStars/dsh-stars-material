@@ -30,14 +30,14 @@ const PRESET_TABLE = {"baseline":{"light":"65558fffffffe9ddff4d3d75625b71ffffffe
 
 /* ---- src/parts/palette-spec.js ---- */
 /**
- * 生成器、Host 端引擎与运行时共用的角色顺序定义。
- *
- * 前 36 项直接读取 `DynamicScheme` 实例上的 getter，即 MaterialDynamicColors 为各
- * M3 方案派生的 ARGB getter。`surfaceTint` 不是 `DynamicScheme` 的 getter，生成器
- * 改从 `MaterialDynamicColors.surfaceTint` 取。
- *
- * 后 8 项是 Material 3 未定义、聊天应用需要的语义色对（成功 / 警告）。取值来自固定
- * 色调板，与种子色无关，绿色与琥珀色在各套配色中保持一致。
+ * 配色规格定义：Material 3 角色顺序、配色算法标识、内置预设与 CSS 桥接变量列表。
+ * 供构建期生成器、Host 端引擎与 Client 端共用。
+ */
+
+/**
+ * 直接从 `DynamicScheme` 实例属性读取的 36 个 Material 3 角色（按编码顺序排列）。
+ * `surfaceTint` 不在 `DynamicScheme` 实例上，由 `palette-engine.js` 单独从
+ * `MaterialDynamicColors.surfaceTint` 读取。
  */
 const ROLE_ORDER = [
   'primary',
@@ -78,7 +78,7 @@ const ROLE_ORDER = [
   'surfaceContainerHighest',
 ];
 
-/** 取自固定色调板的角色。 */
+/** Material 3 未内置的成功/警告语义色角色（8 项），由固定色调板生成，不随种子色变化。 */
 const FIXED_ROLE_ORDER = [
   'success',
   'onSuccess',
@@ -90,27 +90,16 @@ const FIXED_ROLE_ORDER = [
   'onWarningContainer',
 ];
 
-/** `DynamicScheme` 直接暴露的 36 个角色。 */
+/** {@link ROLE_ORDER} 的别名，表示直接来自 DynamicScheme 的 36 个角色。 */
 const SCHEME_ROLE_ORDER = ROLE_ORDER;
 
-/**
- * 本插件只保留一种调和方式。
- *
- * Material 3 提供九种方案变体。全部暴露会使设置页退化为取色器，配色也难以用单一
- * 描述说明。tonal spot 是 M3 的默认方案，文档首先介绍该方案，插件只保留这一种。
- * 变体 id 保留在数据结构中：存档偏好与生成表按该 id 取键。
- */
+/** 本插件固定采用 Material 3 默认的 Tonal Spot 配色算法，该标识用于构建产物说明与日志输出。 */
 const VARIANT_ID = 'tonalSpot';
 
-/** 实现 {@link VARIANT_ID} 的 material-color-utilities 类名。 */
+/** 对应的 Material Color Utilities 方案类名。 */
 const VARIANT_CLASS = 'SchemeTonalSpot';
 
-/**
- * 手动模式提供的 8 个 Material 3 预设。
- *
- * 种子色取自 M3 为基线配色公布的色值，选择某预设得到与该方案文档一致的 `#6750A4`
- * 角色表。自动模式不使用该列表，运行时由操作系统强调色推导配色。
- */
+/** 内置的 8 套预设种子色（其中 baseline 为 Material 3 默认基线色），构建期据此预计算浅色与深色配色。 */
 const PRESETS = [
   { id: 'baseline', hex: '#6750a4', label: 'Material baseline' },
   { id: 'blue', hex: '#00639b', label: 'Blue' },
@@ -122,15 +111,10 @@ const PRESETS = [
   { id: 'blueGrey', hex: '#525e7d', label: 'Blue grey' },
 ];
 
-/** 读不到系统颜色时采用的预设。 */
+/** 默认预设 ID（用于冷启动占位及无法获取系统强调色时的回退）。 */
 const DEFAULT_PRESET = 'baseline';
 
-/**
- * 样式表需要、但 DSH 未提供的颜色。
- *
- * 运行时将每一项的解析结果写成 `:root` 上的 `--dsh-m3-*` 自定义属性，样式表仅引用
- * 这些属性。该列表定义于此，使生成器、Host 引擎与 Client 对需要过桥的角色保持一致。
- */
+/** 需暴露给补充样式表（src/client/stylesheet.js）的 Material 3 角色；Client 会将其写入为 --dsh-m3-* 自定义属性。 */
 const BRIDGE_ROLES = [
   { variable: '--dsh-m3-surface', role: 'surface' },
   { variable: '--dsh-m3-surface-container-lowest', role: 'surfaceContainerLowest' },
@@ -145,8 +129,7 @@ const BRIDGE_ROLES = [
   { variable: '--dsh-m3-primary', role: 'primary' },
   { variable: '--dsh-m3-on-primary', role: 'onPrimary' },
   { variable: '--dsh-m3-primary-container', role: 'primaryContainer' },
-  // 选中行的填充与实心色调按钮都需要第二层容器色。缺少这两项时，样式表只能借用
-  // `primary`，该角色并不适用于容器。
+  // 选中项与填充式色调按钮需要二级容器色，避免误用主色（primary）。
   { variable: '--dsh-m3-secondary-container', role: 'secondaryContainer' },
   { variable: '--dsh-m3-on-secondary-container', role: 'onSecondaryContainer' },
   { variable: '--dsh-m3-error', role: 'error' },
@@ -157,42 +140,33 @@ const BRIDGE_ROLES = [
 
 /* ---- src/parts/token-map.js ---- */
 /**
- * 插件接管的 DSH 令牌，按基础样式表的分层方式分组。每个名称均由 DSH 随包样式表
- * 声明，不会产生产品从不读取的变量。
+ * 宿主 CSS 变量（--dsw-*）到 Material 3 配色的映射表。
+ * 所有变量名均来自 vendor/dsh-survey/ 中的宿主样式表，由 build/validate-coverage.mjs 校验完整性。
  *
- * 映射采用 Material 3 的分层模型：
- *
- *   1. 层级用表面容器色调阶梯表达，不使用描边或投影。四个浅色边框令牌赋值为
- *      `transparent`，高程组合值赋值为 `none`。
- *   2. 交互用 on-surface 状态层表达，不透明度按规范取值（悬停 8%、按压 12%），
- *      不使用阴影。
+ * 设计约定：
+ *   1. 用表面容器明暗阶梯区分层级：常规边框变量置为 transparent，阴影与高程变量置为 none。
+ *   2. 用基于前景色与透明/底色的 color-mix() 叠色表达悬停（8%）与按压（12%）交互状态。
  */
 
-/** 值就是一个 M3 角色的令牌。 */
+/** 直接映射为单个 Material 3 角色的宿主变量。 */
 const ROLE_TOKENS = {
   '--dsw-alias-brand-primary': 'primary',
   '--dsw-alias-brand-primary-invert': 'inversePrimary',
   '--dsw-alias-label-primary': 'onSurface',
   '--dsw-alias-label-primary-dimmed': 'onSurface',
   '--dsw-alias-label-secondary': 'onSurfaceVariant',
-  // 三级文字是产品中使用最多的次要墨色（430 条规则：时间戳、占位符、提示）。M3 为
-  // 此类墨色配置 on-surface-variant；`outline` 保留给控件边界，12px 文字压在容器色
-  // 上时对比不足。
+  // 三级文本广泛用于时间戳、占位符和提示，映射为 onSurfaceVariant 以保证小字号下的对比度（outline 在容器背景上对比度不足）。
   '--dsw-alias-label-tertiary': 'onSurfaceVariant',
   '--dsw-alias-label-caption': 'onSurfaceVariant',
   '--dsw-alias-label-dimmed': 'outlineVariant',
   '--dsw-alias-menu-icon': 'onSurfaceVariant',
 
-  // 表面阶梯：每层比页面浅一档（浅色）或深一档（深色），嵌套本身即形成高程感，
-  // 无需描边。
+  // 表面明暗阶梯：浅色模式逐级变深、深色模式逐级变浅，靠背景色差区分嵌套层级。
   '--dsw-alias-bg-base': 'surface',
   '--dsw-alias-bg-layer-1': 'surfaceContainerLow',
   '--dsw-alias-bg-layer-2': 'surfaceContainer',
   '--dsw-alias-bg-layer-3': 'surfaceContainerHigh',
-  // 浮在页面上的控件底（下拉 pill、字号步进器、外观三选一的选中格）。该令牌原先取
-  // `surfaceContainer`，与面板底（`--dsw-alias-bg-layer-2`）同值，控件落在面板上时
-  // 完全没有底色。M3 的填充型控件要比其所在表面高一档容器色，这里取阶梯顶端的
-  // `surfaceContainerHighest`：比面板高两档，比 `--dsw-alias-bg-layer-3` 再高一档。
+  // 浮于面板之上的填充控件底色（下拉胶囊、步进器、分段选中项），取最高档容器色以与面板背景（bg-layer-2 / bg-layer-3）区分。
   '--dsw-alias-bg-module-platform': 'surfaceContainerHighest',
   '--dsw-alias-bg-multi-select': 'surfaceContainerHigh',
   '--dsw-alias-bg-overlay': 'surfaceContainerHighest',
@@ -233,8 +207,7 @@ const ROLE_TOKENS = {
   '--dsw-alias-menu-group-header-fill': 'surfaceContainerHighest',
   '--dsw-alias-button-ghost-active-fill': 'surfaceContainerHigh',
   '--dsw-alias-button-ghost-active-hover': 'surfaceContainerHighest',
-  // 抬升按钮对应 M3 的实心色调按钮：用第二层容器色填充，呈现为容器页面上的控件。
-  // 该令牌原先与侧栏共用填充，导致「新会话」按钮与背后表面同色而不可见。
+  // 抬升按钮（如侧栏中的「新会话」）使用 secondaryContainer，避免与侧栏底色融为一体。
   '--dsw-alias-button-elevated-fill': 'secondaryContainer',
   '--dsw-alias-button-floating-fill': 'surfaceContainer',
   '--dsw-alias-button-floating-hover': 'surfaceContainerHigh',
@@ -249,7 +222,7 @@ const ROLE_TOKENS = {
   '--dsw-alias-label-primary-bluish': 'primary',
   '--dsw-alias-label-on-color': 'onPrimary',
 
-  // 卡片按表面处理：比页面高一档，悬停时再高一档。M3 以此表示可悬停表面。
+  // 卡片默认比页面底高一档容器色，悬停时再升一档。
   '--dsw-alias-card-fill': 'surfaceContainerLow',
   '--dsw-alias-card-fill-hover': 'surfaceContainer',
   '--dsw-alias-hovercard-bg': 'inverseSurface',
@@ -261,14 +234,13 @@ const ROLE_TOKENS = {
   '--dsw-alias-toast-action': 'inversePrimary',
   '--dsw-alias-tooltip-label': 'inverseOnSurface',
 
-  // 图表系列与轨迹强调色属于数据色：第一条系列使用强调角色，与其余颜色一样随
-  // 种子色变化。
+  // 图表系列与轨迹强调色，随当前主题色同步变化。
   '--dsw-alias-chart-messages': 'primary',
   '--dsw-alias-chart-system': 'outline',
   '--dsw-alias-chart-tools': 'tertiary',
   '--dsw-alias-trajectory-accent': 'primary',
 
-  // JSON 查看器属于语法高亮器；键、值和标点各用不同角色，不再固定为蓝紫品红。
+  // JSON 查看器语法高亮：按元素类别分配不同角色色。
   '--dsw-alias-json-tree-icon': 'onSurfaceVariant',
   '--dsw-alias-json-tree-keyword': 'primary',
   '--dsw-alias-json-tree-number': 'primary',
@@ -279,13 +251,12 @@ const ROLE_TOKENS = {
   '--dsw-specific-guide-hero': 'surfaceContainerHigh',
   '--dsw-specific-sidebar-right-flash': 'primary',
 
-  // 取消描边分隔后，浮层改为实色：半透明菜单相互叠放本是产品表达层级的方式，
-  // 去除描边后该方式不再成立。
+  // 浮层与弹出菜单统一使用实色容器背景，在无边框模式下保持与下层界面的清晰分隔。
   '--dsw-menu-surface-fill': 'surfaceContainerHigh',
   '--dsw-specific-menu': 'surfaceContainerHigh',
   '--dsw-specific-selector': 'surfaceContainerHigh',
   '--dsw-specific-login-input': 'surfaceContainerHigh',
-  // 输入框比菜单高一档，使浮层中的输入框不与背景混同。
+  // 主输入框比浮层高一档，避免与菜单或弹窗背景混同。
   '--dsw-specific-input-major': 'surfaceContainerHighest',
   '--dsw-specific-tip': 'surfaceContainerHighest',
   '--dsw-specific-sidebar-fill': 'surfaceContainerLow',
@@ -295,22 +266,12 @@ const ROLE_TOKENS = {
   '--dsw-specific-sidebar-nav-item-active-accent': 'onSecondaryContainer',
 };
 
-/**
- * 必须消失的令牌。
- *
- * `border-l1`/`l2`/`l4` 是产品的浅色分隔线（4%–16% 不透明度）。这些令牌还被 14 处
- * 分隔线、开关轨道和高程组合值当作颜料使用，相关位置由样式表显式重绘，其余
- * 位置在此赋值为透明。
- */
+/** 置为 transparent 的边框与描边变量。依赖其中变量绘制轨道或分隔线的组件，由 src/client/stylesheet.js 单独重绘。 */
 const CLEARED_TOKENS = [
   '--dsw-alias-border-l1',
   '--dsw-alias-border-l2',
   '--dsw-alias-border-l2-darkmode-thin',
-  // `border-l3` 是最后一处可见轮廓：「新会话」按钮、文件树面板边缘以及另外 68 处
-  // 边框均读取该令牌。另有四条规则将其用作填充（开关轨道、三条发丝分隔线），两个
-  // SVG 环将其用作描边。清空该令牌是实现零轮廓的唯一途径；相关填充由
-  // src/client/stylesheet.js 用 `--dsh-m3-outline-variant` 重绘，两个仪表轨道依靠
-  // 自身的前景弧与文字标签保持可读。
+  // 清空后，原本借用该变量作背景色的开关轨道与分隔线由 stylesheet.js 重绘；设置面板内则按作用域重新绑定。
   '--dsw-alias-border-l3',
   '--dsw-alias-border-l4',
   '--dsw-alias-settings-card-stroke',
@@ -318,16 +279,11 @@ const CLEARED_TOKENS = [
   '--dsw-alias-border-selected',
   '--dsw-alias-border-inverted',
   '--dsw-alias-border-inverted2',
-  // 高程组合值用该令牌画描边，每个重绑该令牌的组件都指向上述某个边框令牌。
+  // 高程阴影组合使用的描边色变量。
   '--dsw-elevation-stroke-color',
 ];
 
-/**
- * 状态层。
- *
- * Material 3 通过将内容色按固定不透明度叠在容器色上表示交互，因此每一项都是角色
- * 色与 `transparent` 或另一角色的 `color-mix`。权重取 M3 状态层的规范不透明度。
- */
+/** 交互状态层变量：按固定权重（如悬停 8%、按压 12%）将角色色与 transparent 或 into 角色做 color-mix()；未设 weight 时直接使用角色色。 */
 const STATE_LAYER_TOKENS = {
   '--dsw-alias-interactive-bg-hover': { role: 'onSurface', weight: 8, into: null },
   '--dsw-alias-interactive-bg-hover-solid': { role: 'onSurface', weight: 8, into: 'surface' },
@@ -336,27 +292,21 @@ const STATE_LAYER_TOKENS = {
   '--dsw-alias-interactive-bg-hover-danger': { role: 'error', weight: 12, into: null },
   '--dsw-alias-turn-trigger-bg-hover': { role: 'onSurface', weight: 8, into: 'surface' },
   '--dsw-alias-button-primary-fill': { role: 'primary' },
-  // 实心按钮悬停：on-primary 以 8% 叠在 primary 上。
   '--dsw-alias-button-primary-hover': { role: 'onPrimary', weight: 8, into: 'primary' },
   '--dsw-alias-button-primary-dimmed': { role: 'onPrimary', weight: 12, into: 'primary' },
   '--dsw-alias-button-info-hover': { role: 'onPrimary', weight: 8, into: 'primary' },
 };
 
-/**
- * 保留 alpha 通道的令牌。M3 没有半透明表面角色，生成器因此按固定不透明度从对应
- * 角色色推导；基础主题依赖这些令牌制作遮罩、选区填充和骨架微光。
- */
+/** 带固定透明度的角色色，用于遮罩、选区高亮、骨架屏与毛玻璃侧栏。 */
 const ALPHA_TOKENS = {
   '--dsw-alias-bg-mask-1': { role: 'scrim', alpha: 0.32 },
   '--dsw-alias-bg-mask-2': { role: 'scrim', alpha: 0.12 },
   '--dsw-alias-bg-mask-3': { role: 'scrim', alpha: 0.48 },
   '--dsw-alias-bg-skeleton': { role: 'onSurface', alpha: 0.06 },
   '--dsw-alias-bg-document-selection': { role: 'primary', alpha: 0.3 },
-  // 卡片瓷片是页面色上的一层薄雾：保留 alpha，颜色换为角色色。
   '--dsw-alias-card-tile-fill': { role: 'onSurface', alpha: 0.04 },
   '--dsw-alias-json-tree-hover': { role: 'onSurface', alpha: 0.08 },
   '--dsw-specific-file-upload-track': { role: 'onSurface', alpha: 0.08 },
-  // 毛玻璃侧栏保留自身表面色的半透明薄膜。
   '--dsw-specific-sidebar-glass-fill': { role: 'surfaceContainerLow', alpha: 0.55 },
   '--dsw-specific-sidebar-glass-hover': { role: 'surfaceContainerLow', alpha: 0.3 },
   '--dsw-specific-sidebar-glass-collapsed-fill': { role: 'surfaceContainerLow', alpha: 0.55 },
@@ -368,10 +318,7 @@ const ALPHA_TOKENS = {
   '--dsw-specific-sidebar-wash-bottom-clear': { role: 'tertiary', alpha: 0 },
 };
 
-/**
- * 基础值由两个角色混合而成的令牌。这些令牌生成 `color-mix` 表达式，由浏览器按
- * 当前令牌值计算。
- */
+/** 由两个角色按固定权重通过 color-mix() 混合得到的变量。 */
 const MIX_TOKENS = {
   '--dsw-alias-label-deep-diving': { role: 'primary', into: 'onSurface', weight: 70 },
   '--dsw-alias-label-deep-diving-shimmer': { role: 'primary', into: 'onSurface', weight: 30 },
@@ -379,7 +326,7 @@ const MIX_TOKENS = {
   '--dsw-alias-label-shimmer': { role: 'onSurface', into: 'surface', weight: 30 },
 };
 
-/** 保持字面量的令牌：描述插图本身，不参与主题表面配色。 */
+/** 固定字面量颜色：用于图片预览遮罩、拖拽蒙层与媒体工具栏按钮，不随主题配色变化。 */
 const LITERAL_TOKENS = {
   '--dsw-alias-bg-mask-photo': '#000000e0',
   '--dsw-alias-bg-mask-drop': '#ffffffb3',
@@ -388,7 +335,7 @@ const LITERAL_TOKENS = {
   '--dsw-alias-button-tool-bar-hover': '#54555799',
 };
 
-/** 差分令牌：M3 没有增删色对，因此由成功容器色与错误容器色向表面色混合得到。 */
+/** 代码差异高亮变量：基于成功/错误语义色，行号槽位向 surface 混合以降低视觉权重。 */
 const DIFF_TOKENS = {
   '--dsw-alias-file-diff-added-bg': { role: 'successContainer' },
   '--dsw-alias-file-diff-added-gutter': { role: 'successContainer', toward: 'surface', weight: 50 },
@@ -398,7 +345,7 @@ const DIFF_TOKENS = {
   '--dsw-alias-file-diff-deleted-marker': { role: 'error' },
 };
 
-/** 剩余 M3 角色到 DSH 插画令牌的对应关系。 */
+/** 内置插画区域的颜色变量映射。 */
 const ILLUSTRATION_TOKENS = {
   '--dsw-alias-illustration-background': 'surfaceContainerLow',
   '--dsw-alias-illustration-surface': 'surfaceContainerHighest',
@@ -408,13 +355,7 @@ const ILLUSTRATION_TOKENS = {
   '--dsw-alias-illustration-shadow': 'surfaceContainerHigh',
 };
 
-/**
- * 高程组合值与阴影档位。
- *
- * 这五个名称构成 DSH 中「深度」的全部视觉语言：一道 0.5dp 描边加两层极淡光晕。
- * Material 3 仅靠色调表达深度，这些组合值全部解析为 `none`。部分组件会在自身元素上
- * 重绑 `--dsw-elevation-stroke-color`，故清空的是组合值本身。
- */
+/** 置为 none 的阴影与高程变量（共 7 项）。部分组件会局部覆写 --dsw-elevation-stroke-color，因此直接清空组合阴影本身。 */
 const ELEVATION_TOKENS = [
   '--dsw-shadow-lv1',
   '--dsw-shadow-lv2',
@@ -425,7 +366,7 @@ const ELEVATION_TOKENS = [
   '--dsw-elevation-soft',
 ];
 
-/** M3 形状刻度，用 DSH 自带的六档圆角表达。 */
+/** Material 3 圆角刻度，映射到宿主圆角变量。 */
 const SHAPE_TOKENS = {
   '--dsw-radius-xs': '4px',
   '--dsw-radius-sm': '8px',
@@ -435,7 +376,7 @@ const SHAPE_TOKENS = {
   '--dsw-radius-panel': '28px',
 };
 
-/** 缓动与时长，作为 CSS 变量交给样式表使用。 */
+/** Material 3 缓动曲线与过渡时长，由 stylesheet.js 注入到 :root。 */
 const MOTION_TOKENS = {
   '--dsw-m3-ease-standard': 'cubic-bezier(0.2, 0, 0, 1)',
   '--dsw-m3-ease-standard-decelerate': 'cubic-bezier(0, 0, 0, 1)',
