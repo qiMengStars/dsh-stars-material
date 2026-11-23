@@ -1,35 +1,35 @@
 {
   "meta": {
     "title": "Material 3 主题",
-    "description": "采用 Material You 配色：用色块而不是边框表达层级，用状态层而不是阴影表达交互。"
+    "description": "为 DeepSeek Harness 提供 Material 3 主题，以不同深浅的背景色区分界面层次，减少边框与投影。"
   },
   "nav": {
     "title": "Material 3"
   },
   "page": {
     "title": "Material 3 主题",
-    "description": "采用 Material You 颜色角色：用色块而不是边框表达层级，用状态层而不是阴影表达交互。明暗两套同时生成，因此始终彼此协调。",
-    "enabledTitle": "启用 Material 3 配色",
-    "enabledDescription": "用 Material 3 角色重新着色表面、文字、分隔与状态色。关闭后回到你原先使用的主题。",
-    "on": "已启用",
+    "description": "以不同深浅的背景色区分界面层次，减少边框与投影，并以半透明叠色呈现悬停与点击反馈，同时生成配套的浅色与深色配色。",
+    "enabledTitle": "启用 Material 3 主题",
+    "enabledDescription": "应用 Material 3 配色到界面背景、文字、控件与交互状态；关闭后恢复原有主题。",
+    "on": "已开启",
     "off": "已关闭",
-    "enable": "启用 Material 3",
-    "disable": "关闭 Material 3",
-    "sourceTitle": "取色来源",
+    "enable": "开启 Material 3 主题",
+    "disable": "关闭 Material 3 主题",
+    "sourceTitle": "配色来源",
     "sourceSystem": "跟随系统",
-    "sourcePreset": "预设颜色",
-    "sourceCustom": "自选颜色",
-    "systemDescription": "由 Windows 强调色推导。",
-    "systemUnavailable": "此系统未设置强调色，因此使用 Material 基准配色。",
-    "sourcePresetDescription": "从 8 个 Material 3 官方种子色中选择。",
-    "sourceCustomDescription": "任意挑选一种颜色，自动生成配套的浅色与深色配色。",
-    "customPickerLabel": "选择自定义种子色",
-    "customHexLabel": "种子色（#rrggbb 格式）",
-    "customApply": "确定",
-    "customPending": "点击确定后生效：",
-    "customUnavailable": "自定义配色生成失败，当前仍使用上一次的配色。",
-    "customStaleHost": "当前 Host 是旧版本，没有读取自选种子色。请重启 dsh 后重新选择颜色。",
-    "note": "修改立即生效，并记忆在本浏览器中，刷新页面即可恢复，无需重启应用。"
+    "sourcePreset": "内置预设",
+    "sourceCustom": "自定义颜色",
+    "systemDescription": "基于 Windows 系统强调色生成",
+    "systemUnavailable": "未能读取有效的系统强调色，当前使用默认预设配色。",
+    "sourcePresetDescription": "从 8 套内置 Material 3 预设配色中选择。",
+    "sourceCustomDescription": "选择任意主色，自动生成配套的浅色与深色配色。",
+    "customPickerLabel": "选择自定义主色",
+    "customHexLabel": "输入十六进制色值（#rrggbb）",
+    "customApply": "应用",
+    "customPending": "待应用",
+    "customUnavailable": "自定义配色生成失败，已保留当前配色。",
+    "customStaleHost": "当前后台服务版本过旧，未能应用自定义颜色。请重启 DeepSeek Harness 后重试。",
+    "note": "更改会立即生效并保存在本地，刷新页面后自动恢复，无需重启应用。"
   },
   "preset": {
     "baseline": "基准紫",

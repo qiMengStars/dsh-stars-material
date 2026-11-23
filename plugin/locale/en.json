@@ -1,35 +1,35 @@
 {
   "meta": {
     "title": "Material 3 theme",
-    "description": "Material You colours, surface tones instead of borders and state layers instead of shadows."
+    "description": "Material 3 theme for DeepSeek Harness, using layered background tones instead of borders and shadows."
   },
   "nav": {
     "title": "Material 3"
   },
   "page": {
     "title": "Material 3 theme",
-    "description": "Material You colour roles, surface tones instead of borders, and state layers instead of shadows. Light and dark are generated together, so the two palettes always agree.",
-    "enabledTitle": "Use Material 3 colours",
-    "enabledDescription": "Recolours surfaces, labels, borders and state colours with Material 3 roles. Turn it off to return to the theme you had before.",
+    "description": "Uses layered background tones instead of borders and shadows, with subtle translucent overlays for hover and press feedback, generating matched light and dark palettes together.",
+    "enabledTitle": "Enable Material 3 theme",
+    "enabledDescription": "Applies Material 3 colors to backgrounds, text, controls, and interactive states. Turn off to restore your previous theme.",
     "on": "On",
     "off": "Off",
-    "enable": "Enable Material 3",
-    "disable": "Disable Material 3",
-    "sourceTitle": "Colour source",
+    "enable": "Enable Material 3 theme",
+    "disable": "Disable Material 3 theme",
+    "sourceTitle": "Color source",
     "sourceSystem": "Follow system",
-    "sourcePreset": "Use a preset",
-    "sourceCustom": "Custom colour",
-    "systemDescription": "Derived from your Windows accent colour.",
-    "systemUnavailable": "No accent colour is set on this system, so the Material baseline palette is used.",
-    "sourcePresetDescription": "One of the eight Material 3 seed colours.",
-    "sourceCustomDescription": "Pick any colour; light and dark palettes are generated from it.",
-    "customPickerLabel": "Pick a custom seed colour",
-    "customHexLabel": "Seed colour in #rrggbb format",
+    "sourcePreset": "Built-in presets",
+    "sourceCustom": "Custom color",
+    "systemDescription": "Derived from Windows accent color",
+    "systemUnavailable": "No usable system accent color was found; using the default preset palette.",
+    "sourcePresetDescription": "Choose from 8 built-in Material 3 palettes.",
+    "sourceCustomDescription": "Pick any base color to generate matched light and dark palettes.",
+    "customPickerLabel": "Pick a custom color",
+    "customHexLabel": "Hex color in #rrggbb format",
     "customApply": "Apply",
     "customPending": "Click Apply to use",
-    "customUnavailable": "The custom palette could not be generated. The previous palette is still in use.",
-    "customStaleHost": "The running Host is an older version and ignored the seed. Restart dsh, then pick the colour again.",
-    "note": "Changes apply immediately and are remembered in this browser, so they survive a reload without restarting the harness."
+    "customUnavailable": "Failed to generate the custom palette. The current palette remains active.",
+    "customStaleHost": "The running host service is outdated and ignored the custom color. Restart DeepSeek Harness and try again.",
+    "note": "Changes apply immediately and are saved locally across reloads without restarting the app."
   },
   "preset": {
     "baseline": "Baseline",
@@ -39,6 +39,6 @@
     "orange": "Orange",
     "pink": "Pink",
     "red": "Red",
-    "blueGrey": "Blue grey"
+    "blueGrey": "Blue gray"
   }
 }
